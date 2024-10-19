@@ -38,7 +38,10 @@ MAIN_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = Bot(MAIN_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 router = Router()
-r = redis.Redis(host='localhost', port=6379, db=0)
+if "AMVERA" in os.environ:
+    pass
+else:
+    r = redis.Redis(host='localhost', port=6379, db=0)
 
 Session = sessionmaker(bind=engine)
 
