@@ -16,6 +16,7 @@ from message_scraper import (
 from message_scraper import Category, MessageRecord, User, ReferralData
 from message_scraper import Base, engine
 from referals import generate_referral_code, cmd_referral_stats
+from dotenv import load_dotenv
 import logging
 import re
 from categories import router_categories
@@ -30,6 +31,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 # MAIN_BOT_TOKEN = '7988159104:AAFRJrtX0FrnHLZiGNQTCPuA3vr2hTre1iE'
+load_dotenv()
 
 MAIN_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
