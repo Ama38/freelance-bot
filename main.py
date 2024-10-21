@@ -566,7 +566,7 @@ async def distribute_message(message_data: dict, categories: list[Category]):
         session.close()
 
 def message_matches_category(message_text: str, category: Category) -> str | None:
-    keywords = category.keywords.split(',')
+    keywords = category.keywords.split('\n')
     message_text_lower = message_text.lower()
     print(message_text, keywords)
     for keyword in keywords:
