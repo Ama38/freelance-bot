@@ -502,7 +502,7 @@ async def process_message(message_data: dict):
                     sender_name=message_data['sender_name'],
                     sender_username=message_data['sender_username'],
                     text=message_data['text'] or "",
-                    date=message_data['date'],
+                    date=message_data['date'].fromisoformat(),
                     category_id=category.id,
                     matched_keyword=matched_keyword
                 )
