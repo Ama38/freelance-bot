@@ -16,6 +16,7 @@ from message_scraper import (
 from message_scraper import Category, MessageRecord, User, ReferralData
 from message_scraper import Base, engine
 from referals import generate_referral_code, cmd_referral_stats
+from auth import telethon_router
 from dotenv import load_dotenv
 import logging
 import re
@@ -38,8 +39,9 @@ MAIN_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = Bot(MAIN_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 router = Router()
+
 if "AMVERA" in os.environ:
-    pass
+    r = redis.Redis(host='amvera-salyev-run-freelance-bot-redis', port=6379, db=0)
 else:
     r = redis.Redis(host='localhost', port=6379, db=0)
 
@@ -48,6 +50,7 @@ Session = sessionmaker(bind=engine)
 dp.include_router(router_categories)
 dp.include_router(router_utils)
 dp.include_router(router_subscriptions)
+dp.include_router(telethon_router)
 WELCOME_MESSAGE = """Привет! Ты активировал Golubin bot. Бот
 ежедневно присылает более 100 заявок на
 услуги фриланса.
