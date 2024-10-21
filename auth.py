@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 if os.getenv('AMVERA'):
-    redis_host = ''
+    redis_host = 'amvera-salyev-run-freelance-bot-redis'
     redis_port = 6379
 else:
     redis_host = 'localhost'
