@@ -1,6 +1,6 @@
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from sqlalchemy.orm import sessionmaker, joinedload
-from message_scraper import engine, User, MessageRecord, Category, ActiveSubscription
+from message_scraper import engine, User, MessageRecord, Category, ActiveSubscription, SuspendedSubscription
 from aiogram import types, Bot, Router, F
 from aiogram.filters import Command
 import logging
@@ -169,7 +169,14 @@ async def process_category_selection(callback_query: types.CallbackQuery):
             await callback_query.answer("Неверная категория")
             return
         
-
+        if not session.query(ActiveSubscription).filter(ActiveSubscription.user_id == user.id).filter(ActiveSubscription.category_id == category.id).first():
+            await callback_query.answer("Уже имеется активная подписка на категорию")
+            return
+        
+        if not session.query(SuspendedSubscription).filter(SuspendedSubscription.user_id == user.id).filter(SuspendedSubscription.category_id == category.id).first():
+            await callback_query.answer("Уже имеется замороженная подписка на категорию")
+            return
+        
         builder = InlineKeyboardBuilder()
 
         builder.button(
