@@ -106,7 +106,7 @@ async def cmd_broadcast(message:Message, state:FSMContext) -> None:
 @router_broadcast.message(StateFilter(BroadcastStates.waiting_for_message))
 async def process_broadcast_message(message:Message, state: FSMContext) -> None:
     await state.update_data(
-        message_id=message,
+        message=message,
         chat_id=message.chat.id,
         message_type=message.content_type
     )
