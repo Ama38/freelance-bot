@@ -24,6 +24,7 @@ from categories import router_categories
 from utils import router_utils, useful_info, support_chat
 from datetime import datetime
 from subscriptions import router_subscriptions
+from message_broadcaster import router_broadcast
 import redis 
 import json
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +52,7 @@ dp.include_router(router_categories)
 dp.include_router(router_utils)
 dp.include_router(router_subscriptions)
 dp.include_router(telethon_router)
+dp.include_router(router_broadcast)
 WELCOME_MESSAGE = """Привет! Ты активировал Golubin bot. Бот
 ежедневно присылает более 100 заявок на
 услуги фриланса.
