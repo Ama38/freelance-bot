@@ -100,6 +100,7 @@ async def cmd_broadcast(message:Message, state:FSMContext) -> None:
         )
 
         await state.set_state(BroadcastStates.waiting_for_message)
+    logger.error("Not admin")
 
 
 @router_broadcast.message(StateFilter(BroadcastStates.waiting_for_message))
