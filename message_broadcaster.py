@@ -9,7 +9,6 @@ from typing import Union
 from aiogram.types import Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from admin import is_admin
-from main import bot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
