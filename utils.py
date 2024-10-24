@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 import logging
 from sqlalchemy.orm import Session
 from message_scraper import engine, Category
-
+from sqlalchemy import text
 router_utils = Router()
 
 
@@ -246,3 +246,20 @@ def support_chat(message: Message, state: FSMContext):
     return cmd_support(message, state)
 
 
+
+
+def setup_message_retention(engine):
+    with engine.connect() as conn:
+        conn.execute(text("DROP TRIGGER IF EXISTS cleanup_messages"))
+
+        trigger_sql = """
+        CREATE TRIGGER cleanup_messages
+        AFTER INSERT ON messages
+        BEGIN
+            DELETE FROM messages 
+            WHERE created_at < datetime('now', '-3 days');
+        END;
+        """
+        conn.execute(text(trigger_sql))
+        conn.commit()
+        print("Added retention trigger to messages table")

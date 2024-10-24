@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 import logging
 import re
 from categories import router_categories
-from utils import router_utils, useful_info, support_chat
+from utils import router_utils, useful_info, support_chat, setup_message_retention
 from datetime import datetime
 from subscriptions import router_subscriptions
 from message_broadcaster import router_broadcast
@@ -603,6 +603,7 @@ async def main():
     dp.include_router(router)
     Base.metadata.create_all(engine)
     asyncio.create_task(receive_messages())
+    setup_message_retention(engine)
     await dp.start_polling(bot)
    
     
