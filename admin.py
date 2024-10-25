@@ -104,11 +104,16 @@ async def list_admins(message: Message):
         await message.answer("Админов нет")
         return 
     
-    admin_list = []
+    admin_list = []  # Replace with the actual list of admins from the database
+    admin_info_list = []  # This will hold the formatted admin information
+
+    # Iterate over the original list of admins
     for admin in admin_list:
         admin_info = [f"ID: {admin.telegram_id}"]
+        
         if admin.username:
             admin_info.append(f"Username: @{admin.username}")
+        
         if admin.first_name or admin.last_name:
             name_parts = []
             if admin.first_name:
@@ -116,11 +121,13 @@ async def list_admins(message: Message):
             if admin.last_name:
                 name_parts.append(admin.last_name)
             admin_info.append(f"Name: {' '.join(name_parts)}")
-        admin_list.append("\n".join(admin_info))
+        
+        admin_info_list.append("\n".join(admin_info))  # Append formatted info to the new list
 
+    # Send the message with the properly formatted list
     await message.answer(
         "Текущие админы:\n\n" + 
-        "\n\n".join(admin_list)
+        "\n\n".join(admin_info_list)  # Join and send the formatted list
     )
         
 
