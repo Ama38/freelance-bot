@@ -14,6 +14,7 @@ from models import Base, engine
 from referals import generate_referral_code, cmd_referral_stats
 from auth import telethon_router
 from dotenv import load_dotenv
+from admin import router_admin
 import logging
 import re
 from categories import router_categories
@@ -50,6 +51,7 @@ dp.include_router(router_utils)
 dp.include_router(router_subscriptions)
 dp.include_router(telethon_router)
 dp.include_router(router_broadcast)
+dp.inline_router(router_admin)
 WELCOME_MESSAGE = """Привет! Ты активировал Golubin bot. Бот
 ежедневно присылает более 100 заявок на
 услуги фриланса.
@@ -596,7 +598,7 @@ async def main():
     distribution_router = get_distribution_router()
     dp.include_router(distribution_router)
     setup_message_retention(engine)
-    setup_existing_bots()
+    await setup_existing_bots()
     await dp.start_polling(bot)
    
     
