@@ -27,7 +27,7 @@ def is_admin(user_id:int) -> bool:
 def admin_only(func):
     @wraps(func)
     async def wrapper(message: Message, **kwargs):
-        if not await is_admin(message.from_user.id):
+        if not is_admin(message.from_user.id):
             return
         return await func(message, **kwargs)
     return wrapper
