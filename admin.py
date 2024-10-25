@@ -104,7 +104,7 @@ async def list_admins(message: Message):
         await message.answer("Админов нет")
         return 
     
-    admin_list = []  # Replace with the actual list of admins from the database
+    admin_list = admins  # Replace with the actual list of admins from the database
     admin_info_list = []  # This will hold the formatted admin information
 
     # Iterate over the original list of admins
