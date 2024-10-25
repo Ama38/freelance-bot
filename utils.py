@@ -274,14 +274,12 @@ SUPPORT_CHAT_ID = -1001234567890
 class SupportStates(StatesGroup):
     waiting_for_message = State()
 
-@router_utils.message(Command("support"))
-@admin_only
+@router_utils.message(F.text == "⚙️ Техподдержка")
 async def cmd_support(message: Message, state: FSMContext):
     await message.answer("Пожалуйста, опишите вашу проблему или задайте вопрос. Мы постараемся помочь вам как можно скорее.\n\nЕсли вы хотите отменить запрос в поддержку, отправьте /cancel.")
     await state.set_state(SupportStates.waiting_for_message)
 
 @router_utils.message(Command("cancel"), StateFilter(SupportStates.waiting_for_message))
-@admin_only
 async def cancel_support(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Запрос в поддержку отменен. Если у вас возникнут вопросы в будущем, не стесняйтесь обращаться.")
@@ -436,3 +434,256 @@ async def confirm_delete_category(callback: CallbackQuery):
 async def cancel_delete_category(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text("Удаление категории отменено.")
+
+
+
+
+
+class EditCategoryForm(StatesGroup):
+    select_category = State()
+    select_field = State()
+    edit_name = State()
+    edit_keywords = State()
+    edit_price_monthly = State()
+    edit_price_quarterly = State()
+    edit_price_yearly = State()
+    edit_bot = State()
+    edit_bot_token = State()
+    edit_bot_username = State()
+
+@router_utils.message(Command("edit_category"), )
+@admin_only
+async def edit_category_start(message: Message, state: FSMContext):
+    with Session(engine) as session:
+        categories = session.query(Category).all()
+        if not categories:
+            await message.answer("Нет доступных категорий для редактирования.")
+            return
+
+        # Create inline keyboard with categories
+        buttons = []
+        for cat in categories:
+            button_text = f"{cat.name}"
+            if cat.bot_username:
+                button_text += f" (@{cat.bot_username})"
+            buttons.append([InlineKeyboardButton(
+                text=button_text, 
+                callback_data=f"edit_cat_{cat.id}"
+            )])
+
+        buttons.append([InlineKeyboardButton(
+            text="Отмена", 
+            callback_data="cancel_edit"
+        )])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await message.answer(
+            "Выберите категорию для редактирования:",
+            reply_markup=keyboard
+        )
+        await state.set_state(EditCategoryForm.select_category)
+
+@router_utils.callback_query(F.data.startswith("edit_cat_"))
+async def select_field_to_edit(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    category_id = int(callback.data.split('_')[2])
+    
+    await state.update_data(category_id=category_id)
+    
+    with Session(engine) as session:
+        category = session.query(Category).filter(Category.id == category_id).first()
+        if not category:
+            await callback.message.edit_text("Категория не найдена.")
+            await state.clear()
+            return
+
+        # Show current category info and field selection buttons
+        category_info = (
+            f"Текущие данные категории '{category.name}':\n\n"
+            f"Ключевые слова: {category.keywords}\n"
+            f"Месячная цена: {category.price_monthly}₽\n"
+            f"Квартальная цена: {category.price_quarterly}₽\n"
+            f"Годовая цена: {category.price_yearly}₽\n"
+        )
+        if category.bot_username:
+            category_info += f"Бот: @{category.bot_username}\n"
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Название", callback_data="edit_field_name")],
+            [InlineKeyboardButton(text="Ключевые слова", callback_data="edit_field_keywords")],
+            [InlineKeyboardButton(text="Месячная цена", callback_data="edit_field_monthly")],
+            [InlineKeyboardButton(text="Квартальная цена", callback_data="edit_field_quarterly")],
+            [InlineKeyboardButton(text="Годовая цена", callback_data="edit_field_yearly")],
+            [InlineKeyboardButton(text="Бот", callback_data="edit_field_bot")],
+            [InlineKeyboardButton(text="Отмена", callback_data="cancel_edit")]
+        ])
+
+        await callback.message.edit_text(
+            f"{category_info}\n"
+            "Выберите поле для редактирования:",
+            reply_markup=keyboard
+        )
+        await state.set_state(EditCategoryForm.select_field)
+
+@router_utils.callback_query(F.data.startswith("edit_field_"))
+async def process_field_selection(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    field = callback.data.split('_')[2]
+    
+    field_names = {
+        'name': ('название', EditCategoryForm.edit_name),
+        'keywords': ('ключевые слова', EditCategoryForm.edit_keywords),
+        'monthly': ('месячную цену', EditCategoryForm.edit_price_monthly),
+        'quarterly': ('квартальную цену', EditCategoryForm.edit_price_quarterly),
+        'yearly': ('годовую цену', EditCategoryForm.edit_price_yearly),
+        'bot': ('бота', EditCategoryForm.edit_bot)
+    }
+    
+    if field in field_names:
+        display_name, next_state = field_names[field]
+        await state.set_state(next_state)
+        
+        if field == 'bot':
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Добавить/изменить бота", callback_data="edit_bot_yes"),
+                    InlineKeyboardButton(text="Удалить бота", callback_data="edit_bot_remove")
+                ],
+                [InlineKeyboardButton(text="Отмена", callback_data="cancel_edit")]
+            ])
+            await callback.message.edit_text(
+                "Выберите действие с ботом:",
+                reply_markup=keyboard
+            )
+        else:
+            await callback.message.edit_text(f"Введите новое {display_name}:")
+
+@router_utils.callback_query(F.data == "edit_bot_yes")
+async def start_bot_edit(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.set_state(EditCategoryForm.edit_bot_token)
+    await callback.message.edit_text("Введите токен бота:")
+
+@router_utils.callback_query(F.data == "edit_bot_remove")
+async def remove_bot(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    data = await state.get_data()
+    
+    with Session(engine) as session:
+        category = session.query(Category).filter(Category.id == data['category_id']).first()
+        if category:
+            category.bot_token = None
+            category.bot_username = None
+            session.commit()
+            await callback.message.edit_text("Бот успешно удален из категории.")
+        else:
+            await callback.message.edit_text("Категория не найдена.")
+    
+    await state.clear()
+
+@router_utils.message(EditCategoryForm.edit_name)
+async def process_edit_name(message: Message, state: FSMContext):
+    data = await state.get_data()
+    with Session(engine) as session:
+        category = session.query(Category).filter(Category.id == data['category_id']).first()
+        if category:
+            category.name = message.text
+            session.commit()
+            await message.answer(f"Название категории обновлено на: {message.text}")
+        else:
+            await message.answer("Категория не найдена.")
+    await state.clear()
+
+@router_utils.message(EditCategoryForm.edit_keywords)
+async def process_edit_keywords(message: Message, state: FSMContext):
+    data = await state.get_data()
+    with Session(engine) as session:
+        category = session.query(Category).filter(Category.id == data['category_id']).first()
+        if category:
+            category.keywords = message.text
+            session.commit()
+            await message.answer(f"Ключевые слова обновлены на: {message.text}")
+        else:
+            await message.answer("Категория не найдена.")
+    await state.clear()
+
+@router_utils.message(EditCategoryForm.edit_price_monthly)
+async def process_edit_price_monthly(message: Message, state: FSMContext):
+    try:
+        price = float(message.text)
+        data = await state.get_data()
+        with Session(engine) as session:
+            category = session.query(Category).filter(Category.id == data['category_id']).first()
+            if category:
+                category.price_monthly = price
+                session.commit()
+                await message.answer(f"Месячная цена обновлена на: {price}₽")
+            else:
+                await message.answer("Категория не найдена.")
+        await state.clear()
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное число для цены.")
+
+@router_utils.message(EditCategoryForm.edit_price_quarterly)
+async def process_edit_price_quarterly(message: Message, state: FSMContext):
+    try:
+        price = float(message.text)
+        data = await state.get_data()
+        with Session(engine) as session:
+            category = session.query(Category).filter(Category.id == data['category_id']).first()
+            if category:
+                category.price_quarterly = price
+                session.commit()
+                await message.answer(f"Квартальная цена обновлена на: {price}₽")
+            else:
+                await message.answer("Категория не найдена.")
+        await state.clear()
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное число для цены.")
+
+@router_utils.message(EditCategoryForm.edit_price_yearly)
+async def process_edit_price_yearly(message: Message, state: FSMContext):
+    try:
+        price = float(message.text)
+        data = await state.get_data()
+        with Session(engine) as session:
+            category = session.query(Category).filter(Category.id == data['category_id']).first()
+            if category:
+                category.price_yearly = price
+                session.commit()
+                await message.answer(f"Годовая цена обновлена на: {price}₽")
+            else:
+                await message.answer("Категория не найдена.")
+        await state.clear()
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное число для цены.")
+
+@router_utils.message(EditCategoryForm.edit_bot_token)
+async def process_edit_bot_token(message: Message, state: FSMContext):
+    await state.update_data(new_bot_token=message.text)
+    await state.set_state(EditCategoryForm.edit_bot_username)
+    await message.answer("Теперь введите username бота (без @):")
+
+@router_utils.message(EditCategoryForm.edit_bot_username)
+async def process_edit_bot_username(message: Message, state: FSMContext):
+    username = message.text.lstrip('@')
+    data = await state.get_data()
+    
+    with Session(engine) as session:
+        category = session.query(Category).filter(Category.id == data['category_id']).first()
+        if category:
+            category.bot_token = data['new_bot_token']
+            category.bot_username = username
+            session.commit()
+            await message.answer(f"Бот (@{username}) успешно добавлен к категории.")
+        else:
+            await message.answer("Категория не найдена.")
+    
+    await state.clear()
+
+@router_utils.callback_query(F.data == "cancel_edit")
+async def cancel_edit(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.edit_text("Редактирование отменено.")
+    await state.clear()

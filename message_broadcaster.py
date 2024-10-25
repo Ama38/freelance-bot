@@ -180,7 +180,7 @@ async def process_broadcast_confirmation(callback_query: types.CallbackQuery, st
             await state.clear()
 
 
-@router_broadcast.message(Command("cancel"))
+@router_broadcast.message(Command("cancel"), StateFilter(BroadcastStates.waiting_for_message))
 @admin_only
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     """Handler for /cancel command"""
@@ -190,6 +190,10 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
     
     await state.clear()
     await message.answer("Broadcast cancelled.")
+
+
+
+
 
 
                     
