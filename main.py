@@ -9,12 +9,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import sessionmaker, joinedload
 from categories import CATEGORIES
-from message_scraper import (
-    cmd_start, cmd_subscribe, cmd_subscribe_to, add_category,
-    start_scraping, get_stats
-)
-from message_scraper import Category, MessageRecord, User, ReferralData
-from message_scraper import Base, engine
+from models import Category, MessageRecord, User, ReferralData
+from models import Base, engine
 from referals import generate_referral_code, cmd_referral_stats
 from auth import telethon_router
 from dotenv import load_dotenv
@@ -27,6 +23,7 @@ from subscriptions import router_subscriptions
 from message_broadcaster import router_broadcast
 import redis 
 import json
+from bots import distribute_message, get_distribution_router, setup_existing_bots
 logging.basicConfig(level=logging.INFO)
 
 
@@ -171,14 +168,7 @@ def create_categories_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=keyboard_inline)
 
 
-@router.message(Command("get_stats"))
-async def handle_get_stats(message: Message):
-    response = await get_stats(message)
-    await message.reply(response)
 
-@router.message(Command("start_scraping"))
-async def handle_start_scraping(message: Message, bot: Bot):
-    await start_scraping(bot, message)
 
 
 
@@ -513,7 +503,7 @@ async def process_message(message_data: dict):
        
         if matched_categories:
             session.commit()
-            await distribute_message(message_data, matched_categories)
+            await distribute_message(message_data, matched_categories, bot)
     except Exception as e:
         logging.error(f"Error in process_message: {str(e)}")
         session.rollback()
@@ -525,47 +515,47 @@ async def process_message(message_data: dict):
 
 
 
-async def distribute_message(message_data: dict, categories: list[Category]):
-    session = Session()
-    try:
-        current_time = datetime.utcnow()
+# async def distribute_message(message_data: dict, categories: list[Category]):
+#     session = Session()
+#     try:
+#         current_time = datetime.utcnow()
        
-        for category in categories:
-            # Reattach the category to this session and eager load active subscriptions
-            category = session.merge(category)
-            session.refresh(category, ['active_subscriptions'])
+#         for category in categories:
+#             # Reattach the category to this session and eager load active subscriptions
+#             category = session.merge(category)
+#             session.refresh(category, ['active_subscriptions'])
            
-            # Filter for active subscriptions
-            active_subscriptions = [
-                sub for sub in category.active_subscriptions
-                if sub.end_date > current_time
-            ]
-            for subscription in active_subscriptions:
-                user = subscription.user
-                try:
-                    message_text = (
-                        f"Новое сообщение в категории '{category.name}':\n\n"
-                        f"{message_data['text']}\n\n"
-                        f"От: {message_data['sender_name']}"
-                    )
-                    if message_data['sender_username']:
-                        message_text += f", @{message_data['sender_username']}"
-                    message_text += f"\nЧат: {message_data['chat_title']}"
+#             # Filter for active subscriptions
+#             active_subscriptions = [
+#                 sub for sub in category.active_subscriptions
+#                 if sub.end_date > current_time
+#             ]
+#             for subscription in active_subscriptions:
+#                 user = subscription.user
+#                 try:
+#                     message_text = (
+#                         f"Новое сообщение в категории '{category.name}':\n\n"
+#                         f"{message_data['text']}\n\n"
+#                         f"От: {message_data['sender_name']}"
+#                     )
+#                     if message_data['sender_username']:
+#                         message_text += f", @{message_data['sender_username']}"
+#                     message_text += f"\nЧат: {message_data['chat_title']}"
                     
-                    # Include the message link if available
-                    if 'message_link' in message_data and message_data['message_link']:
-                        message_text += f"\nСсылка: {message_data['message_link']}"
+#                     # Include the message link if available
+#                     if 'message_link' in message_data and message_data['message_link']:
+#                         message_text += f"\nСсылка: {message_data['message_link']}"
                     
-                    await bot.send_message(
-                        chat_id=user.chat_id,
-                        text=message_text
-                    )
-                except Exception as e:
-                    logging.error(f"Failed to send message to user {user.id}: {e}")
-    except Exception as e:
-        logging.error(f"Error in distribute_message: {e}")
-    finally:
-        session.close()
+#                     await bot.send_message(
+#                         chat_id=user.chat_id,
+#                         text=message_text
+#                     )
+#                 except Exception as e:
+#                     logging.error(f"Failed to send message to user {user.id}: {e}")
+#     except Exception as e:
+#         logging.error(f"Error in distribute_message: {e}")
+#     finally:
+#         session.close()
 
 
 def message_matches_category(message_text: str, category: Category) -> str | None:
@@ -603,7 +593,10 @@ async def main():
     dp.include_router(router)
     Base.metadata.create_all(engine)
     asyncio.create_task(receive_messages())
+    distribution_router = get_distribution_router()
+    dp.include_router(distribution_router)
     setup_message_retention(engine)
+    setup_existing_bots()
     await dp.start_polling(bot)
    
     

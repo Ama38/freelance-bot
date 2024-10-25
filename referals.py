@@ -7,8 +7,8 @@ from sqlalchemy import func
 from datetime import datetime
 import random
 import string
-from message_scraper import engine
-from message_scraper import User, ReferralData, ActiveSubscription
+from models import engine
+from models import User, ReferralData, ActiveSubscription
 
 router_referrals = Router()
 Session = sessionmaker(bind=engine)

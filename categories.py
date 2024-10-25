@@ -1,6 +1,6 @@
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from sqlalchemy.orm import sessionmaker, joinedload
-from message_scraper import engine, User, MessageRecord, Category, ActiveSubscription, SuspendedSubscription
+from models import engine, User, MessageRecord, Category, ActiveSubscription, SuspendedSubscription
 from aiogram import types, Bot, Router, F
 from aiogram.filters import Command
 import logging
@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, timedelta
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from message_scraper import ReferralData
+from models import ReferralData
 from decimal import Decimal
 router_categories = Router()
 ADMIN_USER_ID = '635042713'

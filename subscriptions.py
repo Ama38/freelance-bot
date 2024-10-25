@@ -1,4 +1,4 @@
-from message_scraper import Base, engine, User, MessageRecord, Category
+from models import Base, engine, User, MessageRecord, Category
 from aiogram import Router, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Table
 from sqlalchemy.orm import relationship, joinedload
 from datetime import datetime, timedelta
-from message_scraper import ActiveSubscription, SuspendedSubscription
+from models import ActiveSubscription, SuspendedSubscription
 Session = sessionmaker(bind=engine)
 import logging
 

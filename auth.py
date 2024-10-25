@@ -8,7 +8,7 @@ from aiogram.types import Message
 import redis 
 import json
 from dotenv import load_dotenv
-
+from admin import admin_only
 
 load_dotenv()
 
@@ -38,11 +38,13 @@ class TelethonAuthForm(StatesGroup):
 
 
 @telethon_router.message(Command("auth"))
+@admin_only
 async def auth_command(message: Message, state: FSMContext):
     await state.set_state(TelethonAuthForm.waiting_for_code)
     await message.reply("Please enter the authentication code you received:")
 
 @telethon_router.message(Command('done'))
+@admin_only
 async def finish_auth(message: Message, state: FSMContext):
     current_state = await state.get_state()
 

@@ -2,13 +2,13 @@ from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from message_scraper import Session, User
+from models import Session, User
 from aiogram.filters.state import StateFilter
 import logging
 from typing import Union
 from aiogram.types import Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from admin import is_admin
+from admin import admin_only
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,16 +91,16 @@ async def copy_message_content(msg: Message, target_chat_id: Union[int, str]) ->
 
 
 @router_broadcast.message(Command("broadcast"))
+@admin_only
 async def cmd_broadcast(message:Message, state:FSMContext) -> None:
-    if is_admin(message.from_user.id):
-        await message.answer(
-            "Пожалуйста отправьте сообщение которое вы ходите распространить\n"
-            "Это может быть как текст так и что угодно еще\n"
-            "Отправьте /cancel чтобы отменить операцию"
-        )
+    await message.answer(
+        "Пожалуйста отправьте сообщение которое вы ходите распространить\n"
+        "Это может быть как текст так и что угодно еще\n"
+        "Отправьте /cancel чтобы отменить операцию"
+    )
 
-        await state.set_state(BroadcastStates.waiting_for_message)
-    logger.error("Not admin")
+    await state.set_state(BroadcastStates.waiting_for_message)
+
 
 
 @router_broadcast.message(StateFilter(BroadcastStates.waiting_for_message))
@@ -129,8 +129,7 @@ async def process_broadcast_message(message:Message, state: FSMContext) -> None:
 
 @router_broadcast.callback_query(lambda c: c.data.startswith('broadcast_'))
 async def process_broadcast_confirmation(callback_query: types.CallbackQuery, state: FSMContext):
-    if not is_admin(callback_query.from_user.id):
-        return
+
     
     action = callback_query.data.split("_")[1]
 
@@ -182,6 +181,7 @@ async def process_broadcast_confirmation(callback_query: types.CallbackQuery, st
 
 
 @router_broadcast.message(Command("cancel"))
+@admin_only
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     """Handler for /cancel command"""
     current_state = await state.get_state()
