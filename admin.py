@@ -52,7 +52,7 @@ async def add_admin_start(message:Message, state:FSMContext):
 
 @router_admin.message(AdminManagement.add_get_id)
 async def add_admin_process(message:Message, state:FSMContext):
-    if message.forward_from.id:
+    if message.forward_from is not None:
         user = message.forward_from
         user_id = user.id
         # Safely get optional fields
@@ -67,7 +67,7 @@ async def add_admin_process(message:Message, state:FSMContext):
             last_name = None
         except ValueError:
             await message.answer("Пожалуйста отправьте валидный Telegram ID или пересланное сообщение")
-            return        
+            return     
 
     with Session() as session:
         existing_admin = session.execute(
