@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 
-# MAIN_BOT_TOKEN = '7988159104:AAFRJrtX0FrnHLZiGNQTCPuA3vr2hTre1iE'
+
 load_dotenv()
 
 MAIN_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
