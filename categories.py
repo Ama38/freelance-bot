@@ -13,7 +13,7 @@ from aiogram.fsm.state import State, StatesGroup
 from models import ReferralData
 from decimal import Decimal
 router_categories = Router()
-ADMIN_USER_ID = '635042713'
+ADMIN_USER_ID = '5789674670'
 
 CARD_NUMBER = "9999000011112222"
 # CATEGORY_DATA = [

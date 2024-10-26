@@ -20,3 +20,5 @@ venv/
 
 # Temporary files
 *.tmp
+
+pizda.py
