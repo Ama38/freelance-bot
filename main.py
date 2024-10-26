@@ -599,6 +599,7 @@ async def main():
     dp.include_router(distribution_router)
     setup_message_retention(engine)
     await setup_existing_bots()
+    print("prikol")
     await dp.start_polling(bot)
    
     
