@@ -598,6 +598,7 @@ async def main():
     routers = await setup_existing_bots()
     for i in routers:
         dp.include_router(i)
+        print(f"added router{i}")
     setup_message_retention(engine)
     print("prikol")
     await dp.start_polling(bot)
