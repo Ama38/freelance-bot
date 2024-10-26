@@ -192,9 +192,11 @@ async def setup_existing_bots():
     print("started setup")
     try:
         categories = session.query(Category).filter(Category.bot_token.isnot(None)).all()
+        routers = []
         for category in categories:
             category_router = await start_category_bot(category)
-            distribution_router.include_router(category_router)
+            routers.append(category_router)
+        return routers
     finally:
         session.close()
 
