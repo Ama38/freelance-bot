@@ -595,10 +595,10 @@ async def main():
     dp.include_router(router)
     Base.metadata.create_all(engine)
     asyncio.create_task(receive_messages())
+    await setup_existing_bots()
     distribution_router = get_distribution_router()
     dp.include_router(distribution_router)
     setup_message_retention(engine)
-    await setup_existing_bots()
     print("prikol")
     await dp.start_polling(bot)
    
