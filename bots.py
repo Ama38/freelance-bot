@@ -88,6 +88,7 @@ async def start_category_bot(category: Category):
 
     @router.message(CommandStart())
     async def handle_start(message: Message):
+        print("start trigerred")
         user_id = message.from_user.id
         session = Session()
         try:
