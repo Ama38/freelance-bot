@@ -78,6 +78,8 @@ async def handle_expired_subscription(bot: Bot, user: User, category: Category, 
         logging.error(f"Error handling expired subscription for user {user.id}: {e}")
 
 async def start_category_bot(category: Category):
+
+    logger.debug("category_started")
     bot = Bot(token=category.bot_token)
     router = Router(name=f"category_bot_{category.id}")
 
