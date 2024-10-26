@@ -446,6 +446,15 @@ async def approve_payment(callback_query: CallbackQuery, bot: Bot):
 
         session.commit()
         await bot.send_message(user.chat_id, f"Ваша подписка на {category.name} была одобрена и активирована!")
+        if category.bot_token:
+            message = (
+                f"Пожалуйста напишите нашему боту чтобы начать получать новые сообщения "
+                f"@{category.bot_username}"
+            )
+        else:
+            message = "Вы будете получать сообщения в текущем боте"
+    
+        await bot.send_message(user.chat_id, message)
         await callback_query.answer("Payment approved and subscription activated.")
 
     except Exception as e:
