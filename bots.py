@@ -80,7 +80,10 @@ async def handle_expired_subscription(bot: Bot, user: User, category: Category, 
 async def start_category_bot(category: Category):
 
     logger.debug("category_started")
-    bot = Bot(token=category.bot_token)
+    if category.bot_token:
+        bot = Bot(token=category.bot_token)
+    else:
+        return None
     router = Router(name=f"category_bot_{category.id}")
 
     @router.message(CommandStart())
@@ -195,7 +198,8 @@ async def setup_existing_bots():
         routers = []
         for category in categories:
             category_router = await start_category_bot(category)
-            routers.append(category_router)
+            if category_router:
+                routers.append(category_router)
         return routers
     finally:
         session.close()
