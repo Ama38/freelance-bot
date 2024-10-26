@@ -189,7 +189,7 @@ distribution_router = Router(name="distribution_router")
 
 async def setup_existing_bots():
     session = Session()
-    logger.debug("setup started")
+    print("started setup")
     try:
         categories = session.query(Category).filter(Category.bot_token.isnot(None)).all()
         for category in categories:
