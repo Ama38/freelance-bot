@@ -596,6 +596,7 @@ async def main():
     Base.metadata.create_all(engine)
     asyncio.create_task(receive_messages())
     routers = await setup_existing_bots()
+    print(routers)
     for i in routers:
         dp.include_router(i)
         print(f"added router{i}")
