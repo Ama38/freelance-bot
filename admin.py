@@ -13,14 +13,20 @@ router_admin = Router()
 
 
 
-def is_admin(user_id:int) -> bool:
+def is_admin(user_id: int) -> bool:
+    # Hardcoded admin check
     if user_id == 635042713:
         return True
     
-    with Session() as session:
-        query = select(Admin).where(Admin.telegram_id == user_id)
-        result = session.query(query)
-        return result.scalar_one_or_none() is not None
+    # Database admin check
+    try:
+        with Session() as session:
+            # Directly use session.query
+            admin = session.query(Admin).filter(Admin.telegram_id == user_id).first()
+            return admin is not None
+    except Exception as e:
+        print(f"Error checking admin status: {e}")
+        return False
     
 
 
