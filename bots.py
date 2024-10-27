@@ -30,7 +30,7 @@ async def send_last_3_days_messages(bot: Bot, user_id: int, category_id:int):
             MessageRecord.date >= three_days_ago
         ).order_by(MessageRecord.date).all()
 
-        for message in messages():
+        for message in messages:
             try:
                 message_text = (
                         f"{message.text}\n\n"
