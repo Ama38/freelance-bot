@@ -1,9 +1,10 @@
+import asyncio
 from datetime import datetime, timedelta
 import logging 
 import os 
 from typing import List, Optional
 
-from aiogram import Bot, Router, F
+from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from aiogram.enums import ParseMode
@@ -77,44 +78,96 @@ async def handle_expired_subscription(bot: Bot, user: User, category: Category, 
     except Exception as e:
         logging.error(f"Error handling expired subscription for user {user.id}: {e}")
 
-async def start_category_bot(category: Category):
+# async def start_category_bot(category: Category):
 
-    logger.debug("category_started")
-    if hasattr(category, 'bot_token') and category.bot_token:
-        bot = Bot(token=category.bot_token)
-    else:
-        return None
+#     logger.debug("category_started")
+#     if hasattr(category, 'bot_token') and category.bot_token:
+#         bot = Bot(token=category.bot_token)
+#     else:
+#         return None
+#     router = Router(name=f"category_bot_{category.id}")
+
+#     @router.message(CommandStart())
+#     async def handle_start(message: Message):
+#         print("start trigerred")
+#         user_id = message.from_user.id
+#         session = Session()
+#         try:
+#             subscription = session.query(ActiveSubscription).join(User).filter(
+#                 User.chat_id == user_id,
+#                 ActiveSubscription.category_id == category.id
+#             ).first()
+
+#             current_time = datetime.utcnow()
+
+#             if subscription:
+#                 if subscription.end_date <= current_time:
+#                     # Subscription expired - delete and notify
+#                     await handle_expired_subscription(bot, subscription.user, category, session)
+#                     await message.answer("Ваша подписка истекла. Для продления подписки, пожалуйста, обратитесь к боту.")
+#                 else:
+#                     # Active subscription
+#                     await send_last_3_days_messages(bot, user_id, category.id)
+#             else:
+#                 await message.answer("У вас нет активной подписки на эту категорию.")
+#         except Exception as e:
+#             logging.error(f"Error in welcome message: {e}")
+#         finally:
+#             session.close()
+
+#     return router
+        
+def run_bot(category:Category):
+    if not hasattr(category, 'bot_toeken') or not category.bot_token:
+        logger.warning("fCategory {category.id} does not have a valid bot token. Skipping...")
+        return
+    
+    bot = Bot(token=Category.bot_token)
     router = Router(name=f"category_bot_{category.id}")
 
+
     @router.message(CommandStart())
-    async def handle_start(message: Message):
-        print("start trigerred")
+    async def handle_start(message:Message):
         user_id = message.from_user.id
-        session = Session()
-        try:
-            subscription = session.query(ActiveSubscription).join(User).filter(
-                User.chat_id == user_id,
-                ActiveSubscription.category_id == category.id
-            ).first()
+        logger.debug("fReceived /start command from user {user_id} for helper bot {category.id}")
+        
 
-            current_time = datetime.utcnow()
+        async with Session() as session:
+            try:
+                subscription = await session.execute(
+                    session.query(ActiveSubscription)
+                    .join(User)
+                    .filter(
+                        User.chat_id == user_id,
+                        ActiveSubscription.category_id == category.id
+                    )
+                ).scalar_one_or_none()
 
-            if subscription:
-                if subscription.end_date <= current_time:
-                    # Subscription expired - delete and notify
-                    await handle_expired_subscription(bot, subscription.user, category, session)
-                    await message.answer("Ваша подписка истекла. Для продления подписки, пожалуйста, обратитесь к боту.")
+                current_time = datetime.utcnow()
+
+                if subscription:
+                    if subscription.end_date <= current_time:
+                        await handle_expired_subscription(bot, subscription.user, category, session)
+                        await message.answer("Ваша подписка кончилась пожалуйста обновите ее")
+                    else:
+                        await send_last_3_days_messages(bot, user_id, category.id)
                 else:
-                    # Active subscription
-                    await send_last_3_days_messages(bot, user_id, category.id)
-            else:
-                await message.answer("У вас нет активной подписки на эту категорию.")
-        except Exception as e:
-            logging.error(f"Error in welcome message: {e}")
-        finally:
-            session.close()
+                    await message.answer("Пожалуйста купите подписку на категорию в нашем боте чтобы получать последние фриланс предложения")
+            except Exception as e:
+                logger.error(f"Error handling /start command: {e}")
+            finally:
+                await session.close()
 
-    return router
+        async def start_polling():
+            dp = Dispatcher()
+            dp.include_router(router)
+            logger.info(f"Starting polling for helper bot {category.id}...")
+            await dp.start_polling(bot)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(start_polling())
+
 
 async def distribute_message(message_data: dict, categories: list[Category], main_bot: Bot):
     session = Session()
@@ -191,20 +244,20 @@ async def distribute_message(message_data: dict, categories: list[Category], mai
 distribution_router = Router(name="distribution_router")
 
 
-async def setup_existing_bots():
-    session = Session()
-    print("started setup")
-    try:
-        categories = session.query(Category).filter(Category.bot_token.isnot(None)).all()
-        routers = []
-        for category in categories:
-            category_router = await start_category_bot(category)
-            print(category_router)
-            if category_router:
-                routers.append(category_router)
-        return routers
-    finally:
-        session.close()
+# async def setup_existing_bots():
+#     session = Session()
+#     print("started setup")
+#     try:
+#         categories = session.query(Category).filter(Category.bot_token.isnot(None)).all()
+#         routers = []
+#         for category in categories:
+#             category_router = await start_category_bot(category)
+#             print(category_router)
+#             if category_router:
+#                 routers.append(category_router)
+#         return routers
+#     finally:
+#         session.close()
 
 
 def get_distribution_router() -> Router:

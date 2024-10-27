@@ -1,5 +1,6 @@
 import asyncio
 import os
+from threading import Thread
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
@@ -7,6 +8,7 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.context import FSMContext
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker, joinedload
 from categories import CATEGORIES
 from models import Category, MessageRecord, User, ReferralData
@@ -24,7 +26,7 @@ from subscriptions import router_subscriptions
 from message_broadcaster import router_broadcast
 import redis 
 import json
-from bots import distribute_message, get_distribution_router, setup_existing_bots
+from bots import distribute_message, get_distribution_router, run_bot
 logging.basicConfig(level=logging.INFO)
 
 
@@ -589,7 +591,11 @@ async def process_category_selection(callback: CallbackQuery):
     category_index = int(callback.data.split("_")[1])
     
     
-    
+async def get_categories_with_tokens():
+    async with Session() as session:
+        result = await session.execute(select(Category).where(Category.bot_token.isnot(None)))
+        categories = result.scalars().all()
+    return categories    
 
 
 
@@ -597,11 +603,17 @@ async def main():
     dp.include_router(router)
     Base.metadata.create_all(engine)
     asyncio.create_task(receive_messages())
-    routers = await setup_existing_bots()
-    print(routers)
-    for i in routers:
-        dp.include_router(i)
-        print(f"added router{i}")
+    categories = await get_categories_with_tokens()
+
+    threads = []
+    for category in categories:
+        thread = Thread(target=run_bot, args=(category, ))
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
+    
     setup_message_retention(engine)
     print("prikol")
     await dp.start_polling(bot)
