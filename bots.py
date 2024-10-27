@@ -123,7 +123,7 @@ def run_bot(category:Category):
         return
     
 
-    bot = Bot(token=Category.bot_token)
+    bot = Bot(token=category.bot_token)
     router = Router(name=f"category_bot_{category.id}")
 
 

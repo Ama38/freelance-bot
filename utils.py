@@ -1,3 +1,4 @@
+from threading import Thread
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import types, Bot, Router, F
 from aiogram.filters import Command, StateFilter
@@ -7,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import logging
 from sqlalchemy.orm import Session
+from bots import run_bot
 from models import engine, Category
 from sqlalchemy import text
 from admin import admin_only
@@ -150,7 +152,9 @@ async def save_category(message: Message, state: FSMContext, data: dict):
         
         if data.get('bot_token'):
             response += f"\nБот: @{data['bot_username']}"
-        
+        session.flush()
+        thread = Thread(target=run_bot, args=(new_category,))
+        thread.start()
         await message.answer(response)
         await state.clear()
     except Exception as e:
