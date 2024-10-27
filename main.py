@@ -117,7 +117,8 @@ keyboard = ReplyKeyboardMarkup(
             KeyboardButton(text="📝Заказать направление"),
         ],
     ],
-    resize_keyboard=True
+    resize_keyboard=True,
+    is_persistent=True
 )
 
 keyboard_registered = ReplyKeyboardMarkup(
@@ -136,7 +137,8 @@ keyboard_registered = ReplyKeyboardMarkup(
         ]
         
     ],
-    resize_keyboard=True
+    resize_keyboard=True,
+    is_persistent=True
 )
 
 

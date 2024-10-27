@@ -12,6 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from models import ReferralData
 from decimal import Decimal
+from main import keyboard_registered
 router_categories = Router()
 ADMIN_USER_ID = '5789674670'
 
@@ -454,7 +455,7 @@ async def approve_payment(callback_query: CallbackQuery, bot: Bot):
         else:
             message = "Вы будете получать сообщения в текущем боте"
     
-        await bot.send_message(user.chat_id, message)
+        await bot.send_message(user.chat_id, message, reply_markup=keyboard_registered)
         await callback_query.answer("Payment approved and subscription activated.")
 
     except Exception as e:
