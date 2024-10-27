@@ -12,7 +12,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from models import ReferralData
 from decimal import Decimal
-from main import keyboard_registered
 router_categories = Router()
 ADMIN_USER_ID = '5789674670'
 
@@ -57,6 +56,27 @@ async def category_handler(callback: CallbackQuery):
 
 
 Session = sessionmaker(bind=engine)
+
+
+keyboard_registered = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="🤑 Категории заявок"),
+            KeyboardButton(text="⭐️ Полезное"),
+        ],
+        [
+            KeyboardButton(text="⚙️ Техподдержка"),
+            KeyboardButton(text="🤝Партнерская витрина")
+        ],
+        [
+            KeyboardButton(text="👤 Личный кабинет"),
+            KeyboardButton(text="➕Доп услуги")
+        ]
+        
+    ],
+    resize_keyboard=True,
+    is_persistent=True
+)
 
 
 
