@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import logging
 from sqlalchemy.orm import Session
-from bots import run_bot
+from bots import run_bot, start_new_bot
 from models import engine, Category
 from sqlalchemy import text
 from admin import admin_only
@@ -152,9 +152,8 @@ async def save_category(message: Message, state: FSMContext, data: dict):
         
         if data.get('bot_token'):
             response += f"\nБот: @{data['bot_username']}"
-        session.flush()
-        thread = Thread(target=run_bot, args=(new_category,))
-        thread.start()
+        session.refresh()
+        await start_new_bot(new_category)
         await message.answer(response)
         await state.clear()
     except Exception as e:
@@ -681,6 +680,8 @@ async def process_edit_bot_username(message: Message, state: FSMContext):
             category.bot_username = username
             session.commit()
             await message.answer(f"Бот (@{username}) успешно добавлен к категории.")
+            session.refresh()
+            await start_new_bot(category)
         else:
             await message.answer("Категория не найдена.")
     

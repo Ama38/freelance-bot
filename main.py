@@ -26,7 +26,7 @@ from subscriptions import router_subscriptions
 from message_broadcaster import router_broadcast
 import redis 
 import json
-from bots import distribute_message, get_distribution_router, run_bot
+from bots import distribute_message, get_distribution_router, run_bot, start_new_bot, running_bots
 logging.basicConfig(level=logging.INFO)
 
 
@@ -605,14 +605,17 @@ async def main():
     asyncio.create_task(receive_messages())
     categories = await get_categories_with_tokens()
 
-    threads = []
     for category in categories:
-        thread = Thread(target=run_bot, args=(category, ))
-        thread.start()
-        threads.append(thread)
+        await start_new_bot(category)
 
-    for thread in threads:
-        thread.join()
+    try:
+        while True:
+            await asyncio.sleep(3600)  # Check every hour or adjust as needed
+    except asyncio.CancelledError:
+        # On shutdown, stop all bots
+        for task in running_bots.values():
+            task.cancel()
+        await asyncio.gather(*running_bots.values(), return_exceptions=True)
     
     setup_message_retention(engine)
     print("prikol")

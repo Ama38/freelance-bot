@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta
 import logging 
 import os 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
@@ -117,22 +117,21 @@ async def handle_expired_subscription(bot: Bot, user: User, category: Category, 
 
 #     return router
         
-def run_bot(category:Category):
+running_bots: Dict[int, asyncio.Task] = {}
+
+async def run_bot(category: Category):
     if not hasattr(category, 'bot_token') or not category.bot_token:
-        logger.warning("fCategory {category.id} does not have a valid bot token. Skipping...")
+        logger.warning(f"Category {category.id} does not have a valid bot token. Skipping...")
         return
     
-
     bot = Bot(token=category.bot_token)
     router = Router(name=f"category_bot_{category.id}")
 
-
     @router.message(CommandStart())
-    async def handle_start(message:Message):
+    async def handle_start(message: Message):
         user_id = message.from_user.id
-        logger.debug("fReceived /start command from user {user_id} for helper bot {category.id}")
+        logger.debug(f"Received /start command from user {user_id} for helper bot {category.id}")
         
-
         with Session() as session:
             try:
                 subscription = session.execute(
@@ -143,9 +142,8 @@ def run_bot(category:Category):
                         ActiveSubscription.category_id == category.id
                     )
                 ).scalar_one_or_none()
-
+                
                 current_time = datetime.utcnow()
-
                 if subscription:
                     if subscription.end_date <= current_time:
                         await handle_expired_subscription(bot, subscription.user, category, session)
@@ -157,17 +155,98 @@ def run_bot(category:Category):
             except Exception as e:
                 logger.error(f"Error handling /start command: {e}")
             finally:
-                await session.close()
+                session.close()
 
-        async def start_polling():
-            dp = Dispatcher()
-            dp.include_router(router)
-            logger.info(f"Starting polling for helper bot {category.id}...")
-            await dp.start_polling(bot)
+    try:
+        dp = Dispatcher()
+        dp.include_router(router)
+        logger.info(f"Starting polling for helper bot {category.id}...")
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.error(f"Error in bot {category.id}: {e}")
+    finally:
+        if category.id in running_bots:
+            del running_bots[category.id]
+        await bot.session.close()
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(start_polling())
+
+
+async def start_new_bot(category: Category):
+    """Start a new bot and add it to running_bots"""
+    if category.id in running_bots:
+        logger.warning(f"Bot for category {category.id} is already running")
+        return
+    
+    # Create and store the task
+    task = asyncio.create_task(run_bot(category))
+    running_bots[category.id] = task
+    logger.info(f"Started new bot for category {category.id}")
+
+
+
+async def stop_bot(category_id: int):
+    """Stop a running bot"""
+    if category_id in running_bots:
+        task = running_bots[category_id]
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        del running_bots[category_id]
+        logger.info(f"Stopped bot for category {category_id}")
+
+# def run_bot(category:Category):
+#     if not hasattr(category, 'bot_token') or not category.bot_token:
+#         logger.warning("fCategory {category.id} does not have a valid bot token. Skipping...")
+#         return
+    
+
+#     bot = Bot(token=category.bot_token)
+#     router = Router(name=f"category_bot_{category.id}")
+
+
+#     @router.message(CommandStart())
+#     async def handle_start(message:Message):
+#         user_id = message.from_user.id
+#         logger.debug("fReceived /start command from user {user_id} for helper bot {category.id}")
+        
+
+#         with Session() as session:
+#             try:
+#                 subscription = session.execute(
+#                     session.query(ActiveSubscription)
+#                     .join(User)
+#                     .filter(
+#                         User.chat_id == user_id,
+#                         ActiveSubscription.category_id == category.id
+#                     )
+#                 ).scalar_one_or_none()
+
+#                 current_time = datetime.utcnow()
+
+#                 if subscription:
+#                     if subscription.end_date <= current_time:
+#                         await handle_expired_subscription(bot, subscription.user, category, session)
+#                         await message.answer("Ваша подписка кончилась пожалуйста обновите ее")
+#                     else:
+#                         await send_last_3_days_messages(bot, user_id, category.id)
+#                 else:
+#                     await message.answer("Пожалуйста купите подписку на категорию в нашем боте чтобы получать последние фриланс предложения")
+#             except Exception as e:
+#                 logger.error(f"Error handling /start command: {e}")
+#             finally:
+#                 await session.close()
+
+#         async def start_polling():
+#             dp = Dispatcher()
+#             dp.include_router(router)
+#             logger.info(f"Starting polling for helper bot {category.id}...")
+#             await dp.start_polling(bot)
+
+#         loop = asyncio.new_event_loop()
+#         asyncio.set_event_loop(loop)
+#         loop.run_until_complete(start_polling())
 
 
 async def distribute_message(message_data: dict, categories: list[Category], main_bot: Bot):
