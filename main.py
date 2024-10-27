@@ -614,11 +614,11 @@ async def main():
     setup_message_retention(engine)
     print("prikol")
     await dp.start_polling(bot)
-    
+
     try:
         while True:
             await asyncio.sleep(3600)  # Check every hour or adjust as needed
-    except asyncio.CancelledError:
+    except:
         # On shutdown, stop all bots
         for task in running_bots.values():
             task.cancel()
