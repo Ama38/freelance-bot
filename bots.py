@@ -118,10 +118,11 @@ async def handle_expired_subscription(bot: Bot, user: User, category: Category, 
 #     return router
         
 def run_bot(category:Category):
-    if not hasattr(category, 'bot_toeken') or not category.bot_token:
+    if not hasattr(category, 'bot_token') or not category.bot_token:
         logger.warning("fCategory {category.id} does not have a valid bot token. Skipping...")
         return
     
+
     bot = Bot(token=Category.bot_token)
     router = Router(name=f"category_bot_{category.id}")
 

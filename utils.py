@@ -150,7 +150,7 @@ async def save_category(message: Message, state: FSMContext, data: dict):
         
         if data.get('bot_token'):
             response += f"\nБот: @{data['bot_username']}"
-
+        
         await message.answer(response)
         await state.clear()
     except Exception as e:
