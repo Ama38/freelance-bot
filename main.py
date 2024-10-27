@@ -593,7 +593,7 @@ async def process_category_selection(callback: CallbackQuery):
     
 async def get_categories_with_tokens():
     with Session() as session:
-        result = await session.execute(select(Category).where(Category.bot_token.isnot(None)))
+        result = session.execute(select(Category).where(Category.bot_token.isnot(None)))
         categories = result.scalars().all()
     return categories    
 

@@ -134,7 +134,7 @@ def run_bot(category:Category):
 
         with Session() as session:
             try:
-                subscription = await session.execute(
+                subscription = session.execute(
                     session.query(ActiveSubscription)
                     .join(User)
                     .filter(
