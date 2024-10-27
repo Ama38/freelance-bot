@@ -606,12 +606,15 @@ async def main():
     categories = await get_categories_with_tokens()
 
 
-    setup_message_retention(engine)
-    print("prikol")
-    await dp.start_polling(bot)
+    
     for category in categories:
         await start_new_bot(category)
 
+
+    setup_message_retention(engine)
+    print("prikol")
+    await dp.start_polling(bot)
+    
     try:
         while True:
             await asyncio.sleep(3600)  # Check every hour or adjust as needed
