@@ -132,7 +132,7 @@ def run_bot(category:Category):
         logger.debug("fReceived /start command from user {user_id} for helper bot {category.id}")
         
 
-        async with Session() as session:
+        with Session() as session:
             try:
                 subscription = await session.execute(
                     session.query(ActiveSubscription)
