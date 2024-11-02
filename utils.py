@@ -300,7 +300,7 @@ async def process_support_message(message: Message, state: FSMContext):
     support_message = f"Новое сообщение в поддержку:\n\nID: {user_id}\nUsername: @{username}\n\nСообщение:\n{user_message}"
         
 
-    #await message.bot.send_message(SUPPORT_CHAT_ID, support_message)
+    await message.bot.send_message(SUPPORT_CHAT_ID, support_message)
     print(support_message)
     await message.answer("Спасибо за ваше сообщение. Наша команда поддержки свяжется с вами в ближайшее время.")
     

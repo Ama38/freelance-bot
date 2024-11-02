@@ -54,6 +54,7 @@ dp.include_router(router_subscriptions)
 dp.include_router(telethon_router)
 dp.include_router(router_broadcast)
 dp.include_router(router_admin)
+dp.include_router(router_stats)
 WELCOME_MESSAGE = """Привет! Ты активировал Golubin bot. Бот
 ежедневно присылает более 100 заявок на
 услуги фриланса.
