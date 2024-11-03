@@ -1,8 +1,8 @@
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message, F
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from admin import admin_only
