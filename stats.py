@@ -10,6 +10,7 @@
 # from models import Session
 # import datetime
 # import logging
+from admin import admin_only
 from models import *
 
 
@@ -392,15 +393,9 @@ def get_admin_keyboard():
     ])
 
 @router_stats.message(Command("admin"))
+@admin_only
 async def admin_command(message: Message):
-    with Session() as session:
-        # Check if user is admin
-        admin = session.query(Admin).filter(Admin.telegram_id == message.from_user.id).first()
-        if not admin:
-            await message.answer("You don't have access to admin panel.")
-            return
-        
-        await message.answer("📊 Admin Panel - Choose report type:", reply_markup=get_admin_keyboard())
+    await message.answer("📊 Admin Panel - Choose report type:", reply_markup=get_admin_keyboard())
 
 @router_stats.callback_query(F.data.startswith("report_"))
 async def handle_report_callbacks(callback: CallbackQuery):
