@@ -14,7 +14,7 @@ from admin import admin_only
 from models import *
 
 
-router_stats = Router()
+
 
 
 
@@ -374,7 +374,7 @@ from io import BytesIO
 # Import your models and Session
 from models import Session, User, Admin, Category, ActiveSubscription, SuspendedSubscription, ReferralData
 
-
+router_stats = Router()
 
 def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
