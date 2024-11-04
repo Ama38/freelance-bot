@@ -359,7 +359,7 @@ from models import *
 
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func
@@ -369,6 +369,7 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.chart import BarChart, Reference
+import os
 from io import BytesIO
 
 # Import your models and Session
@@ -393,9 +394,17 @@ def get_admin_keyboard():
     ])
 
 @router_stats.message(Command("admin"))
-@admin_only
 async def admin_command(message: Message):
-    await message.answer("📊 Admin Panel - Choose report type:", reply_markup=get_admin_keyboard())
+    try:
+        with Session() as session:
+            admin = session.query(Admin).filter(Admin.telegram_id == message.from_user.id).first()
+            if not admin:
+                await message.answer("You don't have access to admin panel.")
+                return
+            
+            await message.answer("📊 Admin Panel - Choose report type:", reply_markup=get_admin_keyboard())
+    except Exception as e:
+        await message.answer(f"Error accessing admin panel: {str(e)}")
 
 @router_stats.callback_query(F.data.startswith("report_"))
 async def handle_report_callbacks(callback: CallbackQuery):
@@ -403,43 +412,53 @@ async def handle_report_callbacks(callback: CallbackQuery):
     report_type = callback.data.split("_")[1]
     
     try:
-        if report_type == "users":
-            file = await generate_users_report()
-            filename = "users_report.xlsx"
-        elif report_type == "categories":
-            file = await generate_categories_report()
-            filename = "categories_report.xlsx"
-        elif report_type == "financial":
-            file = await generate_financial_report()
-            filename = "financial_report.xlsx"
-        elif report_type == "subs":
-            file = await generate_subscriptions_report()
-            filename = "subscriptions_report.xlsx"
-        elif report_type == "referrals":
-            file = await generate_referrals_report()
-            filename = "referrals_report.xlsx"
-        else:  # full report
-            file = await generate_full_report()
-            filename = "full_report.xlsx"
+        # Create temporary file path
+        temp_file_path = f"temp_{report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
+        await callback.message.answer("Generating report, please wait...")
+        
+        if report_type == "users":
+            await generate_users_report(temp_file_path)
+            caption = "Users Report"
+        elif report_type == "categories":
+            await generate_categories_report(temp_file_path)
+            caption = "Categories Report"
+        elif report_type == "financial":
+            await generate_financial_report(temp_file_path)
+            caption = "Financial Report"
+        elif report_type == "subs":
+            await generate_subscriptions_report(temp_file_path)
+            caption = "Subscriptions Report"
+        elif report_type == "referrals":
+            await generate_referrals_report(temp_file_path)
+            caption = "Referrals Report"
+        else:  # full report
+            await generate_full_report(temp_file_path)
+            caption = "Full Report"
+
+        # Send document using FSInputFile
         await callback.message.answer_document(
-            document=file,
-            caption=f"📊 {filename.split('_')[0].title()} Report - {datetime.now().strftime('%Y-%m-%d')}",
-            filename=filename
+            document=FSInputFile(temp_file_path),
+            caption=f"📊 {caption} - {datetime.now().strftime('%Y-%m-%d')}"
         )
+        
+        # Clean up temporary file
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        
     except Exception as e:
         await callback.message.answer(f"Error generating report: {str(e)}")
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
-async def generate_users_report() -> BytesIO:
+async def generate_users_report(file_path: str):
     wb = Workbook()
     ws = wb.active
     ws.title = "Users Analysis"
     
     with Session() as session:
-        # Fetch users data
         users = session.query(User).all()
         
-        # Prepare data for DataFrame
         users_data = []
         for user in users:
             active_subs = session.query(func.count(ActiveSubscription.id))\
@@ -458,34 +477,16 @@ async def generate_users_report() -> BytesIO:
     
     df = pd.DataFrame(users_data)
     
-    # Write data to Excel with styling
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
         ws.append(row)
-        if r_idx == 1:  # Header row
+        if r_idx == 1:
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     
-    # Add basic stats chart
-    chart = BarChart()
-    chart.title = "User Statistics"
-    chart.y_axis.title = 'Count'
-    chart.x_axis.title = 'Metric'
-    
-    data = Reference(ws, min_col=4, min_row=1, max_row=len(df)+1, max_col=5)
-    cats = Reference(ws, min_col=4, min_row=2, max_row=2)
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(cats)
-    
-    ws.add_chart(chart, "H2")
-    
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
-    
-    return excel_file
+    wb.save(file_path)
 
-async def generate_categories_report() -> BytesIO:
+async def generate_categories_report(file_path: str):
     wb = Workbook()
     ws = wb.active
     ws.title = "Categories Analysis"
@@ -513,7 +514,6 @@ async def generate_categories_report() -> BytesIO:
     
     df = pd.DataFrame(categories_data)
     
-    # Write data with styling
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
         ws.append(row)
         if r_idx == 1:
@@ -521,13 +521,9 @@ async def generate_categories_report() -> BytesIO:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
-    
-    return excel_file
+    wb.save(file_path)
 
-async def generate_financial_report() -> BytesIO:
+async def generate_financial_report(file_path: str):
     wb = Workbook()
     ws = wb.active
     ws.title = "Financial Analysis"
@@ -567,8 +563,6 @@ async def generate_financial_report() -> BytesIO:
             })
     
     df = pd.DataFrame(financial_data)
-    
-    # Add total row
     df.loc[len(df)] = ['TOTAL', 
                        df['Monthly Subscribers'].sum(),
                        df['Monthly Revenue'].sum(),
@@ -578,21 +572,16 @@ async def generate_financial_report() -> BytesIO:
                        df['Yearly Revenue'].sum(),
                        total_revenue]
     
-    # Write data with styling
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
         ws.append(row)
-        if r_idx == 1:  # Header row
+        if r_idx == 1:
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
-    
-    return excel_file
+    wb.save(file_path)
 
-async def generate_subscriptions_report() -> BytesIO:
+async def generate_subscriptions_report(file_path: str):
     wb = Workbook()
     ws = wb.active
     ws.title = "Subscriptions Analysis"
@@ -614,7 +603,6 @@ async def generate_subscriptions_report() -> BytesIO:
     
     df = pd.DataFrame(subs_data)
     
-    # Write data with styling
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
         ws.append(row)
         if r_idx == 1:
@@ -622,13 +610,9 @@ async def generate_subscriptions_report() -> BytesIO:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
-    
-    return excel_file
+    wb.save(file_path)
 
-async def generate_referrals_report() -> BytesIO:
+async def generate_referrals_report(file_path: str):
     wb = Workbook()
     ws = wb.active
     ws.title = "Referrals Analysis"
@@ -651,7 +635,6 @@ async def generate_referrals_report() -> BytesIO:
     
     df = pd.DataFrame(ref_data)
     
-    # Write data with styling
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
         ws.append(row)
         if r_idx == 1:
@@ -659,54 +642,205 @@ async def generate_referrals_report() -> BytesIO:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
-    
-    return excel_file
+    wb.save(file_path)
 
-async def generate_full_report() -> BytesIO:
+async def generate_full_report(file_path: str):
+    wb = Workbook()
+    
+    # Users Analysis
+    ws = wb.active
+    ws.title = "Users"
     with Session() as session:
-        wb = Workbook()
-        
-        # Users sheet
-        users_file = await generate_users_report()
-        users_wb = pd.read_excel(users_file)
-        users_sheet = wb.active
-        users_sheet.title = "Users"
-        for r_idx, row in enumerate(dataframe_to_rows(users_wb, index=False, header=True), 1):
-            users_sheet.append(row)
-        
-        # Categories sheet
-        categories_file = await generate_categories_report()
-        categories_wb = pd.read_excel(categories_file)
-        categories_sheet = wb.create_sheet("Categories")
-        for r_idx, row in enumerate(dataframe_to_rows(categories_wb, index=False, header=True), 1):
-            categories_sheet.append(row)
-        
-        # Financial sheet
-        financial_file = await generate_financial_report()
-        financial_wb = pd.read_excel(financial_file)
-        financial_sheet = wb.create_sheet("Financial")
-        for r_idx, row in enumerate(dataframe_to_rows(financial_wb, index=False, header=True), 1):
-            financial_sheet.append(row)
-        
-        # Subscriptions sheet
-        subs_file = await generate_subscriptions_report()
-        subs_wb = pd.read_excel(subs_file)
-        subs_sheet = wb.create_sheet("Subscriptions")
-        for r_idx, row in enumerate(dataframe_to_rows(subs_wb, index=False, header=True), 1):
-            subs_sheet.append(row)
-        
-        # Apply styling to all sheets
-        for sheet in wb.sheetnames:
-            ws = wb[sheet]
+        users = session.query(User).all()
+        users_data = []
+        for user in users:
+            active_subs = session.query(func.count(ActiveSubscription.id))\
+                .filter(ActiveSubscription.user_id == user.id).scalar()
+            referred_users = session.query(func.count(User.id))\
+                .filter(User.referred_by_id == user.id).scalar()
+            users_data.append({
+                'User ID': user.id,
+                'Username': user.username,
+                'Full Name': f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                'Active Subscriptions': active_subs,
+                'Referred Users': referred_users,
+                'Total Categories': len(user.categories)
+            })
+    
+    df_users = pd.DataFrame(users_data)
+    for r_idx, row in enumerate(dataframe_to_rows(df_users, index=False, header=True), 1):
+        ws.append(row)
+        if r_idx == 1:
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-        
-        excel_file = BytesIO()
-        wb.save(excel_file)
-        excel_file.seek(0)
-        
-        return excel_file
+    
+    # Categories Analysis
+    ws = wb.create_sheet("Categories")
+    with Session() as session:
+        categories = session.query(Category).all()
+        categories_data = []
+        for category in categories:
+            active_subs = session.query(func.count(ActiveSubscription.id))\
+                .filter(ActiveSubscription.category_id == category.id).scalar()
+            categories_data.append({
+                'Category': category.name,
+                'Monthly Price': category.price_monthly,
+                'Quarterly Price': category.price_quarterly,
+                'Yearly Price': category.price_yearly,
+                'Active Users': len(category.users),
+                'Active Subscriptions': active_subs
+            })
+    
+    df_categories = pd.DataFrame(categories_data)
+    for r_idx, row in enumerate(dataframe_to_rows(df_categories, index=False, header=True), 1):
+        ws.append(row)
+        if r_idx == 1:
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    
+    # Financial Analysis
+    ws = wb.create_sheet("Financial")
+    with Session() as session:
+        financial_data = []
+        for category in categories:
+            monthly_subs = session.query(func.count(ActiveSubscription.id))\
+                .filter(ActiveSubscription.category_id == category.id)\
+                .filter(ActiveSubscription.subscription_type == 'monthly').scalar()
+            quarterly_subs = session.query(func.count(ActiveSubscription.id))\
+                .filter(ActiveSubscription.category_id == category.id)\
+                .filter(ActiveSubscription.subscription_type == 'quarterly').scalar()
+            yearly_subs = session.query(func.count(ActiveSubscription.id))\
+                .filter(ActiveSubscription.category_id == category.id)\
+                .filter(ActiveSubscription.subscription_type == 'yearly').scalar()
+            
+            monthly_revenue = monthly_subs * category.price_monthly
+            quarterly_revenue = quarterly_subs * category.price_quarterly
+            yearly_revenue = yearly_subs * category.price_yearly
+            
+            financial_data.append({
+                'Category': category.name,
+                'Monthly Revenue': monthly_revenue,
+                'Quarterly Revenue': quarterly_revenue,
+                'Yearly Revenue': yearly_revenue,
+                'Total Revenue': monthly_revenue + quarterly_revenue + yearly_revenue
+            })
+    
+    df_financial = pd.DataFrame(financial_data)
+    df_financial.loc[len(df_financial)] = ['TOTAL', 
+                                         df_financial['Monthly Revenue'].sum(),
+                                         df_financial['Quarterly Revenue'].sum(),
+                                         df_financial['Yearly Revenue'].sum(),
+                                         df_financial['Total Revenue'].sum()]
+    
+    for r_idx, row in enumerate(dataframe_to_rows(df_financial, index=False, header=True), 1):
+        ws.append(row)
+        if r_idx == 1:
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    
+    # Subscriptions Analysis
+    ws = wb.create_sheet("Subscriptions")
+    with Session() as session:
+        active_subs = session.query(ActiveSubscription).all()
+        subs_data = []
+        for sub in active_subs:
+            subs_data.append({
+                'User': f"{sub.user.username or ''} ({sub.user.id})",
+                'Category': sub.category.name,
+                'Type': sub.subscription_type,
+                'Start Date': sub.start_date.strftime('%Y-%m-%d'),
+                'End Date': sub.end_date.strftime('%Y-%m-%d'),
+                'Days Left': (sub.end_date - datetime.now()).days,
+                'Price': getattr(sub.category, f'price_{sub.subscription_type}')
+            })
+    
+    df_subs = pd.DataFrame(subs_data)
+    for r_idx, row in enumerate(dataframe_to_rows(df_subs, index=False, header=True), 1):
+        ws.append(row)
+        if r_idx == 1:
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+
+    # Referrals Analysis
+    ws = wb.create_sheet("Referrals")
+    with Session() as session:
+        referral_data = session.query(ReferralData).all()
+        ref_data = []
+        for ref in referral_data:
+            if ref.referrals_paid_count > 0:
+                ref_data.append({
+                    'User': f"{ref.user.username or ''} ({ref.user.id})",
+                    'Balance': ref.referral_balance,
+                    'Paid Referrals': ref.referrals_paid_count,
+                    'Cash Income': ref.cash_income,
+                    'Activations': ref.activations_count,
+                    'Total Payments': ref.payments_sum,
+                    'Average Payment': ref.payments_sum / ref.payments_count if ref.payments_count else 0
+                })
+    
+    df_refs = pd.DataFrame(ref_data)
+    for r_idx, row in enumerate(dataframe_to_rows(df_refs, index=False, header=True), 1):
+        ws.append(row)
+        if r_idx == 1:
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    
+    # Summary Sheet
+    ws = wb.create_sheet("Summary", 0)  # Make it the first sheet
+    summary_data = {
+        'Metric': [
+            'Total Users',
+            'Active Users',
+            'Total Categories',
+            'Total Active Subscriptions',
+            'Total Monthly Revenue',
+            'Total Quarterly Revenue',
+            'Total Yearly Revenue',
+            'Total Overall Revenue',
+            'Active Referrers',
+            'Total Referral Payments'
+        ],
+        'Value': [
+            len(df_users),
+            df_users['Active Subscriptions'].astype(bool).sum(),
+            len(df_categories),
+            len(df_subs),
+            df_financial['Monthly Revenue'].sum(),
+            df_financial['Quarterly Revenue'].sum(),
+            df_financial['Yearly Revenue'].sum(),
+            df_financial['Total Revenue'].sum(),
+            len(df_refs),
+            df_refs['Total Payments'].sum() if len(df_refs) > 0 else 0
+        ]
+    }
+    
+    df_summary = pd.DataFrame(summary_data)
+    for r_idx, row in enumerate(dataframe_to_rows(df_summary, index=False, header=True), 1):
+        ws.append(row)
+        if r_idx == 1:
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    
+    # Adjust column widths for all sheets
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        for column in ws.columns:
+            max_length = 0
+            column = [cell for cell in column]
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column[0].column_letter].width = adjusted_width
+    
+    wb.save(file_path)
+
