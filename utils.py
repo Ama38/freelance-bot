@@ -20,8 +20,10 @@ router_utils = Router()
 class AddCategoryForm(StatesGroup):
     name = State()
     keywords = State()
+    has_3_days_free = State()
     price_monthly = State()
     price_quarterly = State()
+    price_half_yearly = State()
     price_yearly = State()
     bot_token = State()
     bot_username = State()
@@ -50,12 +52,39 @@ async def process_name(message: Message, state: FSMContext):
     await state.set_state(AddCategoryForm.keywords)
     await message.answer("Отлично! Теперь введите ключевые слова для этой категории, разделенные запятыми:")
 
+def get_trial_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Да", callback_data="trial_yes")
+    builder.button(text="Нет", callback_data="trial_no")
+    builder.adjust(2)  # Размещаем кнопки в один ряд
+    return builder.as_markup()
+
 @router_utils.message(AddCategoryForm.keywords)
 async def process_keywords(message: Message, state: FSMContext):
     keywords = message.text.strip()
     await state.update_data(keywords=keywords)
+    await state.set_state(AddCategoryForm.has_3_days_free)
+    await message.answer(
+        "Ключевые слова добавлены. Предоставлять бесплатный пробный период на 3 дня?",
+        reply_markup=get_trial_keyboard()
+    )
+    
+@router_utils.callback_query(lambda c: c.data.startswith("trial_"))
+async def process_trial_choice(callback: CallbackQuery, state: FSMContext):
+    has_trial = callback.data == "trial_yes"
+    await state.update_data(has_3_days_free=has_trial)
+    
+    # Удаляем клавиатуру и обновляем сообщение
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.edit_text(
+        f"{'Пробный период включен' if has_trial else 'Пробный период отключен'}. "
+        "Теперь введите месячную стоимость подписки для этой категории (в рублях):"
+    )
+    
+    # Переходим к следующему состоянию
     await state.set_state(AddCategoryForm.price_monthly)
-    await message.answer("Ключевые слова добавлены. Теперь введите месячную стоимость подписки для этой категории (в рублях):")
+    await callback.answer()
+
 
 @router_utils.message(AddCategoryForm.price_monthly)
 async def process_price_monthly(message: Message, state: FSMContext):
@@ -67,15 +96,29 @@ async def process_price_monthly(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Пожалуйста, введите корректное число для стоимости.")
 
+
 @router_utils.message(AddCategoryForm.price_quarterly)
 async def process_price_quarterly(message: Message, state: FSMContext):
     try:
         price = float(message.text)
         await state.update_data(price_quarterly=price)
+        await state.set_state(AddCategoryForm.price_half_yearly)
+        await message.answer("Теперь введите стоимость подписки за полгода для этой категории (в рублях):")
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное число для стоимости.")
+
+
+@router_utils.message(AddCategoryForm.price_half_yearly)
+async def process_price_half_yearly(message: Message, state: FSMContext):
+    try:
+        price = float(message.text)
+        await state.update_data(price_half_yearly=price)
         await state.set_state(AddCategoryForm.price_yearly)
         await message.answer("Наконец, введите годовую стоимость подписки для этой категории (в рублях):")
     except ValueError:
         await message.answer("Пожалуйста, введите корректное число для стоимости.")
+
+
 
 @router_utils.message(AddCategoryForm.price_yearly)
 async def process_price_yearly(message: Message, state: FSMContext):
@@ -135,27 +178,34 @@ async def save_category(message: Message, state: FSMContext, data: dict):
             new_category = Category(
                 name=data['name'],
                 keywords=data['keywords'],
+                has_3_days_free=data['has_3_days_free'],
                 price_monthly=data['price_monthly'],
                 price_quarterly=data['price_quarterly'],
+                price_half_yearly=data['price_half_yearly'],
                 price_yearly=data['price_yearly'],
                 bot_token=data.get('bot_token'),
                 bot_username=data.get('bot_username')
             )
             session.add(new_category)
             session.commit()
-        
-        response = (f"Категория '{data['name']}' успешно добавлена со следующими данными:\n"
-                   f"Ключевые слова: {data['keywords']}\n"
-                   f"Месячная подписка: {data['price_monthly']} руб.\n"
-                   f"Квартальная подписка: {data['price_quarterly']} руб.\n"
-                   f"Годовая подписка: {data['price_yearly']} руб.")
-        
-        if data.get('bot_token'):
-            response += f"\nБот: @{data['bot_username']}"
-        session.refresh()
-        await start_new_bot(new_category)
-        await message.answer(response)
-        await state.clear()
+       
+            response = (
+                f"Категория '{data['name']}' успешно добавлена со следующими данными:\n"
+                f"Ключевые слова: {data['keywords']}\n"
+                f"Пробный период 3 дня: {'Да' if data['has_3_days_free'] else 'Нет'}\n"
+                f"Месячная подписка: {data['price_monthly']} руб.\n"
+                f"Квартальная подписка: {data['price_quarterly']} руб.\n"
+                f"Полугодовая подписка: {data['price_half_yearly']} руб.\n"
+                f"Годовая подписка: {data['price_yearly']} руб."
+            )
+       
+            if data.get('bot_token'):
+                response += f"\nБот: @{data['bot_username']}"
+            
+            await start_new_bot(new_category)
+            await message.answer(response)
+            await state.clear()
+            
     except Exception as e:
         logging.error(f"Error saving category: {e}")
         await message.answer("Произошла ошибка при сохранении категории. Пожалуйста, попробуйте позже.")
@@ -248,8 +298,8 @@ async def process_price_yearly(message: Message, state: FSMContext):
 def useful_info(message: Message):
 
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="Канал с обновлениями", url="https://t.me/your_channel"))
-    builder.add(InlineKeyboardButton(text="Чат поддержки", url="https://t.me/your_support_chat"))
+    builder.add(InlineKeyboardButton(text="Канал с обновлениями", url="https://t.me/superpuperfreelance"))
+    builder.add(InlineKeyboardButton(text="Чат поддержки", url="https://t.me/seoweb2"))
     builder.add(InlineKeyboardButton(text="Подробнее о боте", callback_data="bot_info"))
     builder.adjust(1)
     return builder.as_markup()
@@ -447,8 +497,10 @@ class EditCategoryForm(StatesGroup):
     select_field = State()
     edit_name = State()
     edit_keywords = State()
+    edit_has_3_days_free = State()
     edit_price_monthly = State()
     edit_price_quarterly = State()
+    edit_price_half_yearly = State()
     edit_price_yearly = State()
     edit_bot = State()
     edit_bot_token = State()
@@ -491,9 +543,9 @@ async def edit_category_start(message: Message, state: FSMContext):
 async def select_field_to_edit(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     category_id = int(callback.data.split('_')[2])
-    
+   
     await state.update_data(category_id=category_id)
-    
+   
     with Session(engine) as session:
         category = session.query(Category).filter(Category.id == category_id).first()
         if not category:
@@ -505,18 +557,23 @@ async def select_field_to_edit(callback: CallbackQuery, state: FSMContext):
         category_info = (
             f"Текущие данные категории '{category.name}':\n\n"
             f"Ключевые слова: {category.keywords}\n"
+            f"Пробный период 3 дня: {'Да' if category.has_3_days_free else 'Нет'}\n"
             f"Месячная цена: {category.price_monthly}₽\n"
             f"Квартальная цена: {category.price_quarterly}₽\n"
+            f"Полугодовая цена: {category.price_half_yearly}₽\n"
             f"Годовая цена: {category.price_yearly}₽\n"
         )
         if category.bot_username:
             category_info += f"Бот: @{category.bot_username}\n"
 
+        # Create keyboard with new options
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Название", callback_data="edit_field_name")],
             [InlineKeyboardButton(text="Ключевые слова", callback_data="edit_field_keywords")],
+            [InlineKeyboardButton(text="Пробный период", callback_data="edit_field_trial")],
             [InlineKeyboardButton(text="Месячная цена", callback_data="edit_field_monthly")],
             [InlineKeyboardButton(text="Квартальная цена", callback_data="edit_field_quarterly")],
+            [InlineKeyboardButton(text="Полугодовая цена", callback_data="edit_field_half_yearly")],
             [InlineKeyboardButton(text="Годовая цена", callback_data="edit_field_yearly")],
             [InlineKeyboardButton(text="Бот", callback_data="edit_field_bot")],
             [InlineKeyboardButton(text="Отмена", callback_data="cancel_edit")]
@@ -533,20 +590,22 @@ async def select_field_to_edit(callback: CallbackQuery, state: FSMContext):
 async def process_field_selection(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     field = callback.data.split('_')[2]
-    
+   
     field_names = {
         'name': ('название', EditCategoryForm.edit_name),
         'keywords': ('ключевые слова', EditCategoryForm.edit_keywords),
+        'trial': ('пробный период', EditCategoryForm.edit_has_3_days_free),
         'monthly': ('месячную цену', EditCategoryForm.edit_price_monthly),
         'quarterly': ('квартальную цену', EditCategoryForm.edit_price_quarterly),
+        'half_yearly': ('полугодовую цену', EditCategoryForm.edit_price_half_yearly),
         'yearly': ('годовую цену', EditCategoryForm.edit_price_yearly),
         'bot': ('бота', EditCategoryForm.edit_bot)
     }
-    
+   
     if field in field_names:
         display_name, next_state = field_names[field]
         await state.set_state(next_state)
-        
+       
         if field == 'bot':
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [
@@ -557,6 +616,18 @@ async def process_field_selection(callback: CallbackQuery, state: FSMContext):
             ])
             await callback.message.edit_text(
                 "Выберите действие с ботом:",
+                reply_markup=keyboard
+            )
+        elif field == 'trial':
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Да", callback_data="edit_trial_yes"),
+                    InlineKeyboardButton(text="Нет", callback_data="edit_trial_no")
+                ],
+                [InlineKeyboardButton(text="Отмена", callback_data="cancel_edit")]
+            ])
+            await callback.message.edit_text(
+                "Включить пробный период на 3 дня?",
                 reply_markup=keyboard
             )
         else:
@@ -584,6 +655,48 @@ async def remove_bot(callback: CallbackQuery, state: FSMContext):
             await callback.message.edit_text("Категория не найдена.")
     
     await state.clear()
+    
+    
+    
+    
+@router_utils.callback_query(lambda c: c.data.startswith("edit_trial_"))
+async def process_edit_trial(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    has_trial = callback.data == "edit_trial_yes"
+    
+    data = await state.get_data()
+    with Session(engine) as session:
+        category = session.query(Category).filter(Category.id == data['category_id']).first()
+        if category:
+            category.has_3_days_free = has_trial
+            session.commit()
+            await callback.message.edit_text(
+                f"Пробный период {'включен' if has_trial else 'отключен'} для категории."
+            )
+        else:
+            await callback.message.edit_text("Категория не найдена.")
+    await state.clear()
+    
+    
+    
+
+@router_utils.message(EditCategoryForm.edit_price_half_yearly)
+async def process_edit_price_half_yearly(message: Message, state: FSMContext):
+    try:
+        price = float(message.text)
+        data = await state.get_data()
+        with Session(engine) as session:
+            category = session.query(Category).filter(Category.id == data['category_id']).first()
+            if category:
+                category.price_half_yearly = price
+                session.commit()
+                await message.answer(f"Полугодовая стоимость подписки обновлена на: {price}₽")
+            else:
+                await message.answer("Категория не найдена.")
+        await state.clear()
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное число для стоимости.")
+
 
 @router_utils.message(EditCategoryForm.edit_name)
 async def process_edit_name(message: Message, state: FSMContext):

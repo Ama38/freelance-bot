@@ -1,6 +1,6 @@
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from sqlalchemy.orm import sessionmaker, joinedload
-from models import engine, User, MessageRecord, Category, ActiveSubscription, SuspendedSubscription
+from models import UsedTrial, engine, User, MessageRecord, Category, ActiveSubscription, SuspendedSubscription
 from aiogram import types, Bot, Router, F
 from aiogram.filters import Command
 import logging
@@ -178,63 +178,83 @@ class PaymentStates(StatesGroup):
 async def process_category_selection(callback_query: types.CallbackQuery):
     category_id = int(callback_query.data.split('_')[1])
     session = Session()
-
     try:
         user = session.query(User).filter(User.chat_id == callback_query.from_user.id).first()
         if not user:
             await callback_query.answer("Пользователь не найден, пожалуйста запустите бота")
             return
-        category = session.query(Category).options(joinedload(Category.users)).filter(Category.id == category_id).first()
-
+        
+        category = session.query(Category).options(
+            joinedload(Category.users),
+            joinedload(Category.used_trials)
+        ).filter(Category.id == category_id).first()
+        
         if not category:
             await callback_query.answer("Неверная категория")
             return
         
-        if session.query(ActiveSubscription).filter(ActiveSubscription.user_id == user.id).filter(ActiveSubscription.category_id == category.id).first():
+        if session.query(ActiveSubscription).filter(
+            ActiveSubscription.user_id == user.id,
+            ActiveSubscription.category_id == category.id
+        ).first():
             await callback_query.answer("Уже имеется активная подписка на категорию")
             return
         
-        if session.query(SuspendedSubscription).filter(SuspendedSubscription.user_id == user.id).filter(SuspendedSubscription.category_id == category.id).first():
+        if session.query(SuspendedSubscription).filter(
+            SuspendedSubscription.user_id == user.id,
+            SuspendedSubscription.category_id == category.id
+        ).first():
             await callback_query.answer("Уже имеется замороженная подписка на категорию")
             return
-        
-        builder = InlineKeyboardBuilder()
 
+        builder = InlineKeyboardBuilder()
+        
+        # Add trial button if available
+        has_used_trial = session.query(UsedTrial).filter(
+            UsedTrial.user_id == user.id,
+            UsedTrial.category_id == category.id
+        ).first()
+        
+        if category.has_3_days_free and not has_used_trial:
+            builder.button(
+                text="Пробный период (3 дня бесплатно)",
+                callback_data=f"trial_{category.id}"
+            )
+
+        # Monthly subscription button
         builder.button(
             text=f"Ежемесячная подписка: {category.price_monthly} руб/мес",
             callback_data=f"price_{category.id}_1"
         )
-
+        
         # Quarterly subscription button
         builder.button(
             text=f"Квартальная подписка: {category.price_quarterly} руб/3 мес",
             callback_data=f"price_{category.id}_3"
         )
-
+        
+        # Half-yearly subscription button
+        builder.button(
+            text=f"Полугодовая подписка: {category.price_half_yearly} руб/6 мес",
+            callback_data=f"price_{category.id}_6"
+        )
+        
         # Yearly subscription button
         builder.button(
             text=f"Годовая подписка: {category.price_yearly} руб/год",
             callback_data=f"price_{category.id}_12"
         )
-
-        builder.button(text="Cancel", callback_data="cancel")
         
-
+        builder.button(text="Отмена", callback_data="cancel")
+        
         builder.adjust(1)
-
-        markup = InlineKeyboardBuilder()
-
-
-        await callback_query.message.answer(text="Выберите длительноость подписки:", reply_markup=builder.as_markup())
+        await callback_query.message.answer(
+            text="Выберите длительность подписки:", 
+            reply_markup=builder.as_markup()
+        )
         
-
-
-        
-
     finally:
         session.close()
-
-
     await callback_query.answer()
 
 
@@ -247,31 +267,36 @@ async def process_subscription_selection(callback_query: CallbackQuery, state: F
     _, category_id, months = callback_query.data.split('_')
     category_id = int(category_id)
     months = int(months)
-
     session = Session()
     try:
         user = session.query(User).options(joinedload(User.referral_data)).filter(User.chat_id == callback_query.from_user.id).first()
         if not user:
             await callback_query.answer("Пользователь не найден, пожалуйста запустите бота")
             return
-
         category = session.query(Category).filter(Category.id == category_id).first()
         if not category:
             await callback_query.answer("Неверная категория")
             return
-
-        # Calculate subscription details
+        
+        # Calculate subscription details based on months
         if months == 1:
             price = category.price_monthly
             subscription_type = "monthly"
+            duration_text = "1 месяц"
         elif months == 3:
             price = category.price_quarterly
             subscription_type = "quarterly"
+            duration_text = "3 месяца"
+        elif months == 6:
+            price = category.price_half_yearly
+            subscription_type = "half_yearly"
+            duration_text = "6 месяцев"
         elif months == 12:
             price = category.price_yearly
             subscription_type = "yearly"
+            duration_text = "1 год"
         else:
-            await callback_query.answer("Invalid subscription period.")
+            await callback_query.answer("Неверный период подписки.")
             return
 
         # Store subscription details in FSM context
@@ -284,29 +309,80 @@ async def process_subscription_selection(callback_query: CallbackQuery, state: F
 
         # Check if user has enough referral balance
         referral_balance = user.referral_data.referral_balance if user.referral_data else 0
-        
+       
         # Create payment method buttons
         buttons = []
         if referral_balance >= price:
             buttons.append([InlineKeyboardButton(text="Оплатить реферальным счетом", callback_data="pay_referral")])
         buttons.append([InlineKeyboardButton(text="Оплатить картой", callback_data="pay_card")])
-
         keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
         await callback_query.message.answer(
             f"Детали подписки:\n"
             f"Категория: {category.name}\n"
-            f"Длительность: {months} month(s)\n"
+            f"Длительность: {duration_text}\n"
             f"Цена: {price} руб\n"
             f"Ваш реферальный баланс: {referral_balance} руб\n\n"
             f"Пожалуйста выберите способ оплаты:",
             reply_markup=keyboard
         )
-
         await state.set_state(PaymentStates.waiting_for_payment_method)
+    except Exception as e:
+        logging.error(f"Error processing subscription selection: {e}")
+        await callback_query.answer("Произошла ошибка при обработке подписки")
+    finally:
+        session.close()
+        
+        
+        
+@router_categories.callback_query(lambda c: c.data.startswith("trial_"))
+async def process_trial_selection(callback_query: CallbackQuery, state: FSMContext):
+    _, category_id = callback_query.data.split('_')
+    category_id = int(category_id)
+    session = Session()
+    try:
+        user = session.query(User).filter(User.chat_id == callback_query.from_user.id).first()
+        category = session.query(Category).filter(Category.id == category_id).first()
+        
+        if not all([user, category]):
+            await callback_query.answer("Ошибка: пользователь или категория не найдены")
+            return
+
+        # Record trial usage
+        new_trial = UsedTrial(
+            user_id=user.id,
+            category_id=category_id
+        )
+        session.add(new_trial)
+        
+        # Calculate trial period dates
+        start_date = datetime.utcnow()
+        end_date = start_date + timedelta(days=3)
+        
+        # Create trial subscription
+        new_subscription = ActiveSubscription(
+            user_id=user.id,
+            category_id=category_id,
+            start_date=start_date,
+            end_date=end_date,
+            subscription_type='trial'
+        )
+        session.add(new_subscription)
+        session.commit()
+
+        await callback_query.message.edit_text(
+            f"Пробный период активирован!\n"
+            f"Категория: {category.name}\n"
+            f"Начало: {start_date.strftime('%d.%m.%Y')}\n"
+            f"Окончание: {end_date.strftime('%d.%m.%Y')}\n\n"
+            "Хорошего пользования!"
+        )
+        await state.clear()
 
     except Exception as e:
-        await callback_query.answer(f"An error occurred: {str(e)}")
+        logging.error(f"Error processing trial: {e}")
+        await callback_query.answer("Произошла ошибка при активации пробного периода")
+        await state.clear()
     finally:
         session.close()
 

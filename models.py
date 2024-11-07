@@ -1,7 +1,7 @@
 import logging
 from aiogram import Bot, types
 from aiogram.filters.command import Command
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Table, func, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Table, func, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, timedelta
@@ -54,6 +54,22 @@ class User(Base):
     referral_data = relationship("ReferralData", uselist=False, back_populates="user")
     referred_by = relationship("User", remote_side=[id], back_populates="referrals")
     referrals = relationship("User", back_populates="referred_by")
+    used_trials = relationship("UsedTrial", back_populates="user")
+
+class UsedTrial(Base):
+    __tablename__ = 'used_trials'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    category_id = Column(Integer, ForeignKey('categories.id'))
+    used_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="used_trials")
+    category = relationship("Category", back_populates="used_trials")
+    
+    
+
+
+
 
 class Admin(Base):
     __tablename__ = "admins_table"
@@ -73,14 +89,17 @@ class Category(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     keywords = Column(String, nullable=False)
+    has_3_days_free = Column(Boolean, nullable=False)
     price_monthly = Column(Float, nullable=False)
     price_quarterly = Column(Float, nullable=False)
+    price_half_yearly = Column(Float, nullable=False)
     price_yearly = Column(Float, nullable=False)
     bot_token = Column(String)
     bot_username = Column(String)
     users = relationship("User", secondary=user_category, back_populates="categories")
     active_subscriptions = relationship("ActiveSubscription", back_populates="category", cascade="all, delete-orphan")
     suspended_subscriptions = relationship("SuspendedSubscription", back_populates="category")
+    used_trials = relationship("UsedTrial", back_populates="category")
 
 
 class MessageRecord(Base):
