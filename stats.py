@@ -366,7 +366,8 @@ from sqlalchemy import func
 from datetime import datetime
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.chart import BarChart, Reference
 import os
@@ -493,26 +494,56 @@ async def generate_categories_report(file_path: str):
                 .filter(ActiveSubscription.category_id == category.id).scalar()
             suspended_subs = session.query(func.count(SuspendedSubscription.id))\
                 .filter(SuspendedSubscription.category_id == category.id).scalar()
+            
+            # Get count of trial users
+            trial_users = session.query(func.count(UsedTrial.id))\
+                .filter(UsedTrial.category_id == category.id).scalar()
+            
+            # Get count of active trial subscriptions
+            active_trials = session.query(func.count(ActiveSubscription.id))\
+                .filter(
+                    ActiveSubscription.category_id == category.id,
+                    ActiveSubscription.subscription_type == 'trial'
+                ).scalar()
                
             categories_data.append({
                 'Категория': category.name,
+                'Пробный период': 'Да' if category.has_3_days_free else 'Нет',
+                'Использовали пробный период': trial_users,
+                'Активные пробные': active_trials,
                 'Месячная цена': category.price_monthly,
                 'Квартальная цена': category.price_quarterly,
+                'Полугодовая цена': category.price_half_yearly,
                 'Годовая цена': category.price_yearly,
                 'Активные пользователи': len(category.users),
-                'Активные подписки': active_subs,
+                'Активные подписки': active_subs - active_trials,  # Исключаем пробные
                 'Приостановленные подписки': suspended_subs,
                 'Ключевые слова': category.keywords
             })
    
     df = pd.DataFrame(categories_data)
+    
+    # Adjust column widths based on content
+    max_lengths = {column: max(df[column].astype(str).apply(len).max(), len(column)) + 2 
+                  for column in df.columns}
    
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
         ws.append(row)
-        if r_idx == 1:
+        if r_idx == 1:  # Header row
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+            
+            # Set column widths
+            for idx, column in enumerate(df.columns, 1):
+                ws.column_dimensions[get_column_letter(idx)].width = max_lengths[column]
+    
+    # Add some basic formatting for better readability
+    for row in ws.iter_rows(min_row=2):  # Starting from second row
+        for cell in row:
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = '#,##0'  # Format numbers with thousand separator
+            cell.alignment = Alignment(horizontal='left')  # Left align all cells
    
     wb.save(file_path)
 
@@ -642,7 +673,7 @@ async def generate_referrals_report(file_path: str):
 async def generate_full_report(file_path: str):
     wb = Workbook()
     
-    # Users Analysis
+    # Users Analysis (unchanged)
     ws = wb.active
     ws.title = "Пользователи"
     with Session() as session:
@@ -653,11 +684,14 @@ async def generate_full_report(file_path: str):
                 .filter(ActiveSubscription.user_id == user.id).scalar()
             referred_users = session.query(func.count(User.id))\
                 .filter(User.referred_by_id == user.id).scalar()
+            trial_count = session.query(func.count(UsedTrial.id))\
+                .filter(UsedTrial.user_id == user.id).scalar()
             users_data.append({
                 'ID пользователя': user.id,
                 'Имя пользователя': user.username,
                 'Полное имя': f"{user.first_name or ''} {user.last_name or ''}".strip(),
                 'Активные подписки': active_subs,
+                'Использовано пробных периодов': trial_count,
                 'Приглашенные пользователи': referred_users,
                 'Всего категорий': len(user.categories)
             })
@@ -677,14 +711,26 @@ async def generate_full_report(file_path: str):
         categories_data = []
         for category in categories:
             active_subs = session.query(func.count(ActiveSubscription.id))\
-                .filter(ActiveSubscription.category_id == category.id).scalar()
+                .filter(ActiveSubscription.category_id == category.id)\
+                .filter(ActiveSubscription.subscription_type != 'trial').scalar()
+            trial_users = session.query(func.count(UsedTrial.id))\
+                .filter(UsedTrial.category_id == category.id).scalar()
+            active_trials = session.query(func.count(ActiveSubscription.id))\
+                .filter(
+                    ActiveSubscription.category_id == category.id,
+                    ActiveSubscription.subscription_type == 'trial'
+                ).scalar()
             categories_data.append({
                 'Категория': category.name,
+                'Пробный период': 'Да' if category.has_3_days_free else 'Нет',
+                'Использовали пробный период': trial_users,
+                'Активные пробные': active_trials,
                 'Месячная цена': category.price_monthly,
                 'Квартальная цена': category.price_quarterly,
+                'Полугодовая цена': category.price_half_yearly,
                 'Годовая цена': category.price_yearly,
                 'Активные пользователи': len(category.users),
-                'Активные подписки': active_subs
+                'Активные подписки': active_subs,
             })
     
     df_categories = pd.DataFrame(categories_data)
@@ -706,26 +752,32 @@ async def generate_full_report(file_path: str):
             quarterly_subs = session.query(func.count(ActiveSubscription.id))\
                 .filter(ActiveSubscription.category_id == category.id)\
                 .filter(ActiveSubscription.subscription_type == 'quarterly').scalar()
+            half_yearly_subs = session.query(func.count(ActiveSubscription.id))\
+                .filter(ActiveSubscription.category_id == category.id)\
+                .filter(ActiveSubscription.subscription_type == 'half_yearly').scalar()
             yearly_subs = session.query(func.count(ActiveSubscription.id))\
                 .filter(ActiveSubscription.category_id == category.id)\
                 .filter(ActiveSubscription.subscription_type == 'yearly').scalar()
             
             monthly_revenue = monthly_subs * category.price_monthly
             quarterly_revenue = quarterly_subs * category.price_quarterly
+            half_yearly_revenue = half_yearly_subs * category.price_half_yearly
             yearly_revenue = yearly_subs * category.price_yearly
             
             financial_data.append({
                 'Категория': category.name,
                 'Месячный доход': monthly_revenue,
                 'Квартальный доход': quarterly_revenue,
+                'Полугодовой доход': half_yearly_revenue,
                 'Годовой доход': yearly_revenue,
-                'Общий доход': monthly_revenue + quarterly_revenue + yearly_revenue
+                'Общий доход': monthly_revenue + quarterly_revenue + half_yearly_revenue + yearly_revenue
             })
     
     df_financial = pd.DataFrame(financial_data)
     df_financial.loc[len(df_financial)] = ['ИТОГО', 
                                          df_financial['Месячный доход'].sum(),
                                          df_financial['Квартальный доход'].sum(),
+                                         df_financial['Полугодовой доход'].sum(),
                                          df_financial['Годовой доход'].sum(),
                                          df_financial['Общий доход'].sum()]
     
@@ -742,16 +794,28 @@ async def generate_full_report(file_path: str):
         active_subs = session.query(ActiveSubscription).all()
         subs_data = []
         for sub in active_subs:
+            # Определяем тип подписки для отображения
+            sub_type_display = {
+                'trial': 'Пробный период',
+                'monthly': 'Месячная',
+                'quarterly': 'Квартальная',
+                'half_yearly': 'Полугодовая',
+                'yearly': 'Годовая'
+            }.get(sub.subscription_type, sub.subscription_type)
+            
+            # Определяем цену (для пробного периода - 0)
+            price = 0 if sub.subscription_type == 'trial' else getattr(
+                sub.category, f'price_{sub.subscription_type}', 0
+            )
+            
             subs_data.append({
                 'Пользователь': f"{sub.user.username or ''} ({sub.user.id})",
                 'Категория': sub.category.name,
-                'Тип': 'Месячная' if sub.subscription_type == 'monthly' 
-                      else 'Квартальная' if sub.subscription_type == 'quarterly'
-                      else 'Годовая',
+                'Тип': sub_type_display,
                 'Дата начала': sub.start_date.strftime('%d.%m.%Y'),
                 'Дата окончания': sub.end_date.strftime('%d.%m.%Y'),
                 'Осталось дней': (sub.end_date - datetime.now()).days,
-                'Цена': getattr(sub.category, f'price_{sub.subscription_type}')
+                'Цена': price
             })
     
     df_subs = pd.DataFrame(subs_data)
@@ -762,7 +826,7 @@ async def generate_full_report(file_path: str):
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
 
-    # Referrals Analysis
+    # Referrals Analysis (unchanged)
     ws = wb.create_sheet("Рефералы")
     with Session() as session:
         referral_data = session.query(ReferralData).all()
@@ -788,15 +852,18 @@ async def generate_full_report(file_path: str):
                 cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     
     # Summary Sheet
-    ws = wb.create_sheet("Сводка", 0)  # Make it the first sheet
+    ws = wb.create_sheet("Сводка", 0)
     summary_data = {
         'Показатель': [
             'Всего пользователей',
             'Активные пользователи',
+            'Пользователи с пробным периодом',
             'Всего категорий',
             'Всего активных подписок',
+            'Активных пробных периодов',
             'Общий месячный доход',
             'Общий квартальный доход',
+            'Общий полугодовой доход',
             'Общий годовой доход',
             'Общий доход',
             'Активные рефералы',
@@ -805,10 +872,13 @@ async def generate_full_report(file_path: str):
         'Значение': [
             len(df_users),
             df_users['Активные подписки'].astype(bool).sum(),
+            df_users['Использовано пробных периодов'].astype(bool).sum(),
             len(df_categories),
             len(df_subs),
+            len(df_subs[df_subs['Тип'] == 'Пробный период']),
             df_financial['Месячный доход'].sum(),
             df_financial['Квартальный доход'].sum(),
+            df_financial['Полугодовой доход'].sum(),
             df_financial['Годовой доход'].sum(),
             df_financial['Общий доход'].sum(),
             len(df_refs),
