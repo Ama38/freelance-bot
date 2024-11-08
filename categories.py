@@ -370,16 +370,6 @@ async def process_trial_selection(callback_query: CallbackQuery, state: FSMConte
         session.add(new_subscription)
         session.commit()
 
-        await callback_query.message.edit_text(
-            f"Пробный период активирован!\n"
-            f"Категория: {category.name}\n"
-            f"Начало: {start_date.strftime('%d.%m.%Y')}\n"
-            f"Окончание: {end_date.strftime('%d.%m.%Y')}\n\n"
-            "Хорошего пользования!"
-        )
-        
-        
-        
         if category.bot_token:
             callback_query.message.answer(
                 f"Пожалуйста напишите нашему боту чтобы начать получать новые сообщения "
@@ -394,6 +384,19 @@ async def process_trial_selection(callback_query: CallbackQuery, state: FSMConte
                 "Вы будете получать сообщения в текущем боте"
             )
             # message = "Вы будете получать сообщения в текущем боте"
+        
+        
+        await callback_query.message.edit_text(
+            f"Пробный период активирован!\n"
+            f"Категория: {category.name}\n"
+            f"Начало: {start_date.strftime('%d.%m.%Y')}\n"
+            f"Окончание: {end_date.strftime('%d.%m.%Y')}\n\n"
+            "Хорошего пользования!"
+        )
+        
+        
+        
+        
         await state.clear()
 
     except Exception as e:
