@@ -218,7 +218,7 @@ async def process_category_selection(callback_query: types.CallbackQuery):
         if category.has_3_days_free and not has_used_trial:
             builder.button(
                 text="Пробный период (3 дня бесплатно)",
-                callback_data=f"trial_{category.id}"
+                callback_data=f"trial_price_{category.id}"
             )
 
         # Monthly subscription button
@@ -335,9 +335,9 @@ async def process_subscription_selection(callback_query: CallbackQuery, state: F
         
         
         
-@router_categories.callback_query(lambda c: c.data.startswith("trial_"))
+@router_categories.callback_query(lambda c: c.data.startswith("trial_price_"))
 async def process_trial_selection(callback_query: CallbackQuery, state: FSMContext):
-    _, category_id = callback_query.data.split('_')
+    _, __, category_id = callback_query.data.split('_')
     category_id = int(category_id)
     session = Session()
     try:
