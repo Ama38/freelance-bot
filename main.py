@@ -571,22 +571,25 @@ async def process_message(message_data: dict):
 def message_matches_category(message_text: str, category: Category) -> str | None:
     keywords = category.keywords.split('\n')
     message_text_lower = message_text.lower()
+    
     for keyword in keywords:
         keyword = keyword.strip().lower()
         is_hashtag = keyword.startswith('#')
-
+        
         if is_hashtag:
             keyword = keyword[1:]
-        pattern = r'\b' + re.escape(keyword) + r'\w*\b'
         
+        # Create a pattern that looks for the root followed by any characters
+        pattern = r'(' + re.escape(keyword) + r')'
         if is_hashtag:
             hashtag_pattern = r'#' + pattern
             if re.search(hashtag_pattern, message_text_lower):
-                return '#' + keyword  
+                return '#' + keyword
         
+        # Remove word boundaries and make the pattern more flexible
         if re.search(pattern, message_text_lower):
             return '#' + keyword if is_hashtag else keyword
-    
+            
     return None
 
 
