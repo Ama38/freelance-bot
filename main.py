@@ -578,16 +578,22 @@ def message_matches_category(message_text: str, category: Category) -> str | Non
         
         if is_hashtag:
             keyword = keyword[1:]
+            
+        # Split into individual word roots
+        word_roots = keyword.split()
         
-        # Create a pattern that looks for the root followed by any characters
-        pattern = r'(' + re.escape(keyword) + r')'
+        # Create pattern for each root that allows any ending
+        patterns = [re.escape(root) + r'\w*' for root in word_roots]
+        
+        # Join patterns with flexible whitespace between them
+        combined_pattern = r'\s+'.join(patterns)
+        
         if is_hashtag:
-            hashtag_pattern = r'#' + pattern
+            hashtag_pattern = r'#' + combined_pattern
             if re.search(hashtag_pattern, message_text_lower):
                 return '#' + keyword
-        
-        # Remove word boundaries and make the pattern more flexible
-        if re.search(pattern, message_text_lower):
+                
+        if re.search(combined_pattern, message_text_lower):
             return '#' + keyword if is_hashtag else keyword
             
     return None
