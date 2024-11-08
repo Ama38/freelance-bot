@@ -568,7 +568,18 @@ async def process_message(message_data: dict):
 #         session.close()
 
 
-def message_matches_category(message_text: str, category: Category) -> str | None:
+def message_matches_category(message_text: str, category: Category) -> Optional[str]:
+    """
+    Match message text against category keywords with flexible word endings and order.
+    
+    Args:
+        message_text: Text to check
+        category: Category object containing keywords
+        
+    Returns:
+        str: Matching keyword or hashtag if found
+        None: If no match found
+    """
     keywords = category.keywords.split('\n')
     message_text_lower = message_text.lower()
     
@@ -588,8 +599,10 @@ def message_matches_category(message_text: str, category: Category) -> str | Non
             patterns_forward = [re.escape(root) + r'\w*' for root in word_roots]
             patterns_reversed = [re.escape(root) + r'\w*' for root in reversed(word_roots)]
             
-            # Join patterns with flexible whitespace
-            combined_pattern = f"({r'\s+'.join(patterns_forward)})|({r'\s+'.join(patterns_reversed)})"
+            # Join patterns with flexible whitespace, avoiding f-string with backslash
+            pattern_forward = r'\s+'.join(patterns_forward)
+            pattern_reversed = r'\s+'.join(patterns_reversed)
+            combined_pattern = f"({pattern_forward})|({pattern_reversed})"
         else:
             # For single word or 3+ words, keep original order
             patterns = [re.escape(root) + r'\w*' for root in word_roots]
