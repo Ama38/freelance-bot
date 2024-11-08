@@ -582,11 +582,18 @@ def message_matches_category(message_text: str, category: Category) -> str | Non
         # Split into individual word roots
         word_roots = keyword.split()
         
-        # Create pattern for each root that allows any ending
-        patterns = [re.escape(root) + r'\w*' for root in word_roots]
-        
-        # Join patterns with flexible whitespace between them
-        combined_pattern = r'\s+'.join(patterns)
+        # Only try different orders for two-word keywords
+        if len(word_roots) == 2:
+            # Create patterns for both word orders
+            patterns_forward = [re.escape(root) + r'\w*' for root in word_roots]
+            patterns_reversed = [re.escape(root) + r'\w*' for root in reversed(word_roots)]
+            
+            # Join patterns with flexible whitespace
+            combined_pattern = f"({r'\s+'.join(patterns_forward)})|({r'\s+'.join(patterns_reversed)})"
+        else:
+            # For single word or 3+ words, keep original order
+            patterns = [re.escape(root) + r'\w*' for root in word_roots]
+            combined_pattern = r'\s+'.join(patterns)
         
         if is_hashtag:
             hashtag_pattern = r'#' + combined_pattern
