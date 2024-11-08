@@ -377,6 +377,23 @@ async def process_trial_selection(callback_query: CallbackQuery, state: FSMConte
             f"Окончание: {end_date.strftime('%d.%m.%Y')}\n\n"
             "Хорошего пользования!"
         )
+        
+        
+        
+        if category.bot_token:
+            callback_query.message.answer(
+                f"Пожалуйста напишите нашему боту чтобы начать получать новые сообщения "
+                f"@{category.bot_username}"
+            )
+            # message = (
+            #     f"Пожалуйста напишите нашему боту чтобы начать получать новые сообщения "
+            #     f"@{category.bot_username}"
+            # )
+        else:
+            callback_query.message.answer(
+                "Вы будете получать сообщения в текущем боте"
+            )
+            # message = "Вы будете получать сообщения в текущем боте"
         await state.clear()
 
     except Exception as e:
