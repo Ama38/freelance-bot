@@ -15,7 +15,7 @@ from decimal import Decimal
 router_categories = Router()
 ADMIN_USER_ID = '5789674670'
 
-CARD_NUMBER = "9999000011112222"
+CARD_NUMBER = "2202208341626571"
 # CATEGORY_DATA = [
 #     {"name": "Таргет", "bot_username": "xnoBadVibes"},
 #     {"name": "SMM", "bot_username": "xnoBadVibes"},
@@ -432,7 +432,7 @@ async def process_payment_method(callback_query: CallbackQuery, state: FSMContex
             await bot.send_message(
                 user_id,
                 f"Пожалуйста оплатите сумму {price} руб по следующему номеру карты:\n\n"
-                f"{CARD_NUMBER}\n\n"
+                f"{CARD_NUMBER} Marat S.\n\n" 
                 "После процесса оплаты, пожалуйста отправьте снимок экрана с чеком в этот чат."
             )
             await state.set_state(PaymentStates.waiting_for_card_payment)
